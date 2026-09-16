@@ -211,7 +211,10 @@ export default function RegisterPage() {
       createdAt: nowIso,
     };
 
-    await saveOrder(newOrder);
+    const saveResult = await saveOrder(newOrder);
+    if (saveResult.synced && saveResult.orderNumber) {
+      setOrderNumber(saveResult.orderNumber);
+    }
 
     setProducts((prev) =>
       prev.map((prod) => {

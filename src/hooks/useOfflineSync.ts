@@ -20,6 +20,16 @@ export interface OrderData {
 const PENDING_KEY = 'pos_un-synced_orders';
 const COMPLETED_KEY = 'pos_completed_orders';
 
+interface CheckoutResult {
+  order_id?: string;
+}
+
+interface SaveOrderResult {
+  success: boolean;
+  synced: boolean;
+  orderNumber?: number;
+}
+
 export function useOfflineSync() {
   // SSRと初回クライアント描画を一致させ、hydration mismatchを防ぐ
   const [isOnline, setIsOnline] = useState<boolean>(true);
@@ -56,9 +66,9 @@ export function useOfflineSync() {
   }, []);
 
   // オンライン時はSupabaseの会計RPCへ送信する
-  const sendOrderToServer = useCallback(async (order: OrderData): Promise<boolean> => {
+  const sendOrderToServer = useCallback(async (order: OrderData): Promise<{ success: boolean; orderNumber?: number }> => {
     try {
-      const { error } = await supabase.rpc('process_checkout', {
+      const { data, error } = await supabase.rpc('process_checkout', {
         p_staff_name: order.staffName,
         p_total_amount: order.finalTotal,
         p_received_amount: order.receivedAmount,
@@ -72,13 +82,30 @@ export function useOfflineSync() {
 
       if (error) {
         console.error('Supabaseへの注文送信に失敗しました:', error.message);
-        return false;
+        return { success: false };
       }
 
-      return true;
+      const checkout = data as CheckoutResult | null;
+      if (!checkout?.order_id) {
+        console.error('会計RPCからorder_idが返されませんでした。');
+        return { success: false };
+      }
+
+      const { data: savedOrder, error: orderError } = await supabase
+        .from('orders')
+        .select('order_number')
+        .eq('id', checkout.order_id)
+        .single();
+
+      if (orderError || !savedOrder) {
+        console.error('登録済み注文番号の取得に失敗しました:', orderError?.message);
+        return { success: false };
+      }
+
+      return { success: true, orderNumber: savedOrder.order_number };
     } catch (error) {
       console.error('Supabaseへの注文送信中に例外が発生しました:', error);
-      return false;
+      return { success: false };
     }
   }, []);
 
@@ -95,13 +122,16 @@ export function useOfflineSync() {
       // 1件ずつ送信し、成功するごとにストレージから削除（通信断絶対策）
       while (currentQueue.length > 0 && navigator.onLine) {
         const targetOrder = currentQueue[0];
-        const success = await sendOrderToServer(targetOrder);
+        const result = await sendOrderToServer(targetOrder);
 
-        if (success) {
+        if (result.success) {
+          const syncedOrder = result.orderNumber
+            ? { ...targetOrder, orderNumber: result.orderNumber }
+            : targetOrder;
           currentQueue = currentQueue.slice(1);
           localStorage.setItem(PENDING_KEY, JSON.stringify(currentQueue));
           setPendingOrders(currentQueue);
-          saveCompletedLocal(targetOrder);
+          saveCompletedLocal(syncedOrder);
         } else {
           // 送信失敗時はループ中断
           break;
@@ -154,12 +184,15 @@ export function useOfflineSync() {
   }, [loadLocalData, syncPendingOrders]);
 
   // 新規注文保存
-  const saveOrder = useCallback(async (order: OrderData) => {
+  const saveOrder = useCallback(async (order: OrderData): Promise<SaveOrderResult> => {
     if (navigator.onLine) {
-      const success = await sendOrderToServer(order);
-      if (success) {
-        saveCompletedLocal(order);
-        return { success: true, synced: true };
+      const result = await sendOrderToServer(order);
+      if (result.success) {
+        const syncedOrder = result.orderNumber
+          ? { ...order, orderNumber: result.orderNumber }
+          : order;
+        saveCompletedLocal(syncedOrder);
+        return { success: true, synced: true, orderNumber: syncedOrder.orderNumber };
       }
     }
 
@@ -168,7 +201,7 @@ export function useOfflineSync() {
     const updated = [...currentQueue, order];
     localStorage.setItem(PENDING_KEY, JSON.stringify(updated));
     setPendingOrders(updated);
-    return { success: true, synced: false };
+    return { success: true, synced: false, orderNumber: order.orderNumber };
   }, [sendOrderToServer, saveCompletedLocal]);
 
   return {
