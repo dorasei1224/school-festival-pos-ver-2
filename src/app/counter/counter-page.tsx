@@ -31,6 +31,7 @@ interface DatabaseOrder {
 
 export default function CounterPage() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [activeView, setActiveView] = useState<'board' | 'history'>('board');
 
   const fetchOrders = useCallback(async () => {
     const { data, error } = await supabase
@@ -85,6 +86,7 @@ export default function CounterPage() {
   const preparingOrders = orders.filter((o) => o.status === 'preparing');
   const callingOrders = orders.filter((o) => o.status === 'calling');
   const completedOrders = orders.filter((o) => o.status === 'completed');
+  const recentCompletedOrders = completedOrders.slice(-5).reverse();
 
   return (
     <div className="min-h-screen bg-[#F3F4F6] text-neutral-800 font-sans flex flex-col antialiased">
@@ -123,9 +125,33 @@ export default function CounterPage() {
         </div>
       </header>
 
+      <nav className="bg-white border-b border-neutral-200/80" aria-label="受け渡し画面の表示切替">
+        <div className="max-w-[1400px] mx-auto px-3 sm:px-6 flex gap-1 overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setActiveView('board')}
+            className={`px-4 py-3 text-xs font-bold border-b-2 whitespace-nowrap transition ${
+              activeView === 'board' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-700'
+            }`}
+          >
+            受け渡し状況
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveView('history')}
+            className={`px-4 py-3 text-xs font-bold border-b-2 whitespace-nowrap transition ${
+              activeView === 'history' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-700'
+            }`}
+          >
+            完了履歴 ({completedOrders.length}件)
+          </button>
+        </div>
+      </nav>
+
       {/* ========================================================= */}
       {/* メインエリア：カウンター進行状況表示 */}
       {/* ========================================================= */}
+      {activeView === 'board' ? (
       <main className="max-w-[1400px] mx-auto px-3 sm:px-6 py-4 sm:py-6 flex-1 w-full grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 items-start">
         {/* ① 準備中・調理中カラム */}
         <section className="lg:col-span-5 bg-white rounded-3xl p-4 sm:p-5 border border-neutral-200/80 shadow-sm min-h-[420px] lg:min-h-[600px] flex flex-col">
@@ -240,7 +266,7 @@ export default function CounterPage() {
             {completedOrders.length === 0 ? (
               <p className="text-xs text-neutral-400 text-center py-20">完了済みの履歴はありません</p>
             ) : (
-              completedOrders.map((order) => (
+              recentCompletedOrders.map((order) => (
                 <div
                   key={order.id}
                   className="bg-neutral-50 rounded-xl p-3 border border-neutral-100 flex justify-between items-center opacity-70"
@@ -263,8 +289,52 @@ export default function CounterPage() {
               ))
             )}
           </div>
+          {completedOrders.length > recentCompletedOrders.length && (
+            <button
+              type="button"
+              onClick={() => setActiveView('history')}
+              className="mt-4 w-full py-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-xs font-bold rounded-xl transition"
+            >
+              すべての完了履歴を見る ({completedOrders.length}件)
+            </button>
+          )}
         </section>
       </main>
+      ) : (
+        <main className="max-w-[900px] mx-auto px-3 sm:px-6 py-4 sm:py-6 flex-1 w-full">
+          <section className="bg-white rounded-3xl p-4 sm:p-6 border border-neutral-200/80 shadow-sm">
+            <div className="flex justify-between items-center pb-4 mb-4 border-b border-neutral-100">
+              <div>
+                <h2 className="font-bold text-base text-neutral-900">受け渡し完了履歴</h2>
+                <p className="text-xs text-neutral-400 mt-1">完了済みの注文をすべて表示しています</p>
+              </div>
+              <span className="text-xs text-neutral-500 font-bold">{completedOrders.length}件</span>
+            </div>
+            <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
+              {completedOrders.length === 0 ? (
+                <p className="text-xs text-neutral-400 text-center py-20">完了済みの履歴はありません</p>
+              ) : (
+                [...completedOrders].reverse().map((order) => (
+                  <div key={order.id} className="bg-neutral-50 rounded-2xl p-4 border border-neutral-100 flex justify-between items-center gap-4">
+                    <div className="min-w-0">
+                      <span className="font-extrabold text-lg text-neutral-800 block">No. {order.orderNumber}</span>
+                      <span className="text-xs text-neutral-500 block truncate">{order.items.map((i) => `${i.name} ×${i.quantity}`).join(', ')}</span>
+                      <span className="text-[10px] text-neutral-400">{order.time}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => updateStatus(order.id, 'calling')}
+                      className="shrink-0 text-xs text-neutral-600 hover:text-neutral-900 underline font-bold"
+                    >
+                      呼び出し中に戻す
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+        </main>
+      )}
     </div>
   );
 }
