@@ -249,9 +249,9 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen bg-[#F3F4F6] text-neutral-800 font-sans flex flex-col antialiased">
       <header className="bg-white border-b border-neutral-200 sticky top-0 z-20 shadow-sm print:hidden">
-        <div className="max-w-[1400px] mx-auto px-6 py-3 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <h1 className="text-lg font-bold tracking-tight text-neutral-900">文化祭POS</h1>
+        <div className="max-w-[1400px] mx-auto px-3 sm:px-6 py-3 flex flex-col sm:flex-row gap-3 sm:gap-0 sm:justify-between sm:items-center">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <h1 className="text-base sm:text-lg font-bold tracking-tight text-neutral-900">文化祭POS</h1>
 
             {isOnline ? (
               <span className="bg-emerald-50 text-emerald-600 text-xs font-bold px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1.5">
@@ -280,11 +280,11 @@ export default function RegisterPage() {
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 bg-neutral-50 border border-neutral-200 rounded-lg px-2.5 py-1">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-2 bg-neutral-50 border border-neutral-200 rounded-lg px-2.5 py-1 max-w-full">
               <span className="text-xs text-neutral-400 font-medium">担当:</span>
               <span className="bg-transparent text-xs font-bold text-neutral-800 cursor-default">
-                {staffName}
+                <span className="max-w-[7rem] truncate">{staffName}</span>
               </span>
               <button
                 onClick={() => {
@@ -299,13 +299,13 @@ export default function RegisterPage() {
             </div>
             <Link
               href="/counter"
-              className="text-xs bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-medium px-3 py-1.5 rounded-lg transition"
+              className="text-xs bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-medium px-2.5 sm:px-3 py-1.5 rounded-lg transition"
             >
               受け渡し画面
             </Link>
             <Link
               href="/admin"
-              className="bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-medium px-3.5 py-1.5 rounded-lg transition shadow-sm"
+              className="bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-medium px-2.5 sm:px-3.5 py-1.5 rounded-lg transition"
             >
               管理画面へ
             </Link>
@@ -313,14 +313,14 @@ export default function RegisterPage() {
         </div>
       </header>
 
-      <main className="max-w-[1400px] mx-auto px-6 py-6 flex-1 w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-start print:hidden">
+      <main className="max-w-[1400px] mx-auto px-3 sm:px-6 py-4 sm:py-6 flex-1 w-full grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-8 items-start print:hidden">
         <div className="lg:col-span-7 flex flex-col gap-6">
-          <div className="flex gap-2">
+          <div className="flex gap-2 overflow-x-auto pb-1">
             {categories.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-5 py-2 rounded-full text-xs font-bold transition-all ${
+                className={`px-4 sm:px-5 py-2 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
                   selectedCategory === cat
                     ? 'bg-neutral-900 text-white shadow'
                     : 'bg-white text-neutral-700 hover:bg-neutral-100 border border-neutral-200/60'
@@ -331,7 +331,7 @@ export default function RegisterPage() {
             ))}
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
             {filteredProducts.map((product) => {
               const cartItem = cart.find((c) => c.product.id === product.id);
               const countInCart = cartItem ? cartItem.quantity : 0;
@@ -342,7 +342,7 @@ export default function RegisterPage() {
                   key={product.id}
                   disabled={isOutOfStock}
                   onClick={() => addToCart(product)}
-                  className={`relative p-5 rounded-2xl bg-white border border-neutral-200/70 shadow-sm text-left flex flex-col justify-between h-36 transition-all ${
+                  className={`relative p-4 sm:p-5 rounded-2xl bg-white border border-neutral-200/70 shadow-sm text-left flex flex-col justify-between min-h-32 sm:h-36 transition-all ${
                     isOutOfStock ? 'opacity-40 cursor-not-allowed' : 'hover:border-neutral-400 active:scale-[0.98]'
                   }`}
                 >
@@ -367,7 +367,7 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        <div className="lg:col-span-5 bg-white rounded-3xl p-6 border border-neutral-200/80 shadow-sm min-h-[540px] flex flex-col justify-between">
+        <div className="lg:col-span-5 bg-white rounded-3xl p-4 sm:p-6 border border-neutral-200/80 shadow-sm min-h-[540px] flex flex-col justify-between">
           {step === 'cart' && (
             <div className="flex flex-col justify-between h-full">
               <div>

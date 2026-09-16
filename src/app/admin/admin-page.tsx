@@ -123,6 +123,13 @@ export default function AdminPage() {
   const [reportEndDate, setReportEndDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [reportStartHour, setReportStartHour] = useState(8);
   const [reportEndHour, setReportEndHour] = useState(19);
+  const [hoveredChartPoint, setHoveredChartPoint] = useState<{
+    hour: string;
+    sales: number;
+    count: number;
+    x: number;
+    y: number;
+  } | null>(null);
 
   // ドロアー点検用ステート
   const [initialCash, setInitialCash] = useState<number>(10000);
@@ -319,10 +326,10 @@ export default function AdminPage() {
     const end = new Date(`${reportEndDate}T23:59:59.999`);
     return orders.filter((order) => {
       const createdAt = new Date(order.created_at);
-      return order.status !== 'cancelled' && createdAt >= start && createdAt <= end;
+      return order.status.toLowerCase() !== 'cancelled' && createdAt >= start && createdAt <= end;
     });
   }, [orders, reportStartDate, reportEndDate]);
-  const totalSales = useMemo(() => validOrders.reduce((sum, o) => sum + o.total_amount, 0), [validOrders]);
+  const totalSales = useMemo(() => validOrders.reduce((sum, o) => sum + Number(o.total_amount || 0), 0), [validOrders]);
   const totalOrdersCount = validOrders.length;
   const averageCustomerSpend = totalOrdersCount > 0 ? Math.round(totalSales / totalOrdersCount) : 0;
 
@@ -335,7 +342,7 @@ export default function AdminPage() {
       const date = new Date(o.created_at);
       const hour = date.getHours();
       if (map[hour] !== undefined) {
-        map[hour].sales += o.total_amount;
+        map[hour].sales += Number(o.total_amount || 0);
         map[hour].count += 1;
       }
     });
@@ -348,6 +355,18 @@ export default function AdminPage() {
   }, [validOrders, reportStartHour, reportEndHour]);
 
   const maxHourlySales = useMemo(() => Math.max(...hourlyData.map((d) => d.sales), 1), [hourlyData]);
+  const chartMinWidth = Math.max(hourlyData.length * 48, 560);
+  const chartWidth = Math.max(hourlyData.length * 64, 720);
+  const chartHeight = 240;
+  const chartPadding = { top: 20, right: 24, bottom: 36, left: 16 };
+  const chartInnerWidth = chartWidth - chartPadding.left - chartPadding.right;
+  const chartInnerHeight = chartHeight - chartPadding.top - chartPadding.bottom;
+  const chartPoints = hourlyData.map((data, index) => {
+    const x = chartPadding.left + (hourlyData.length === 1 ? chartInnerWidth / 2 : (index / (hourlyData.length - 1)) * chartInnerWidth);
+    const y = chartPadding.top + chartInnerHeight - (data.sales / maxHourlySales) * chartInnerHeight;
+    return { ...data, x, y };
+  });
+  const chartPolyline = chartPoints.map((point) => `${point.x},${point.y}`).join(' ');
 
   const productSalesMap = useMemo(() => {
     const map: Record<string, { name: string; category: string; quantity: number; total: number }> = {};
@@ -420,9 +439,9 @@ export default function AdminPage() {
       <div className="print:hidden">
         {/* ヘッダー */}
         <header className="bg-white border-b border-neutral-200/80 sticky top-0 z-10 shadow-sm">
-          <div className="max-w-7xl mx-auto px-6 py-3.5 flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <h1 className="text-lg font-bold tracking-tight text-neutral-900">
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3.5 flex flex-col sm:flex-row gap-3 sm:gap-0 sm:justify-between sm:items-center">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <h1 className="text-base sm:text-lg font-bold tracking-tight text-neutral-900">
                 文化祭POS 管理システム
               </h1>
               <span className="bg-neutral-100 text-neutral-600 text-xs font-semibold px-2.5 py-0.5 rounded-md border border-neutral-200">
@@ -430,10 +449,10 @@ export default function AdminPage() {
               </span>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={handlePrintPDF}
-                className="bg-neutral-900 hover:bg-neutral-800 text-white font-bold text-xs px-3.5 py-1.5 rounded-lg transition"
+                className="bg-neutral-900 hover:bg-neutral-800 text-white font-bold text-xs px-2.5 sm:px-3.5 py-1.5 rounded-lg transition"
               >
                 日計レポート(PDF)を出力
               </button>
@@ -452,7 +471,7 @@ export default function AdminPage() {
             </div>
           </div>
 
-          <div className="max-w-7xl mx-auto px-6 flex gap-1 border-t border-neutral-100 pt-1 overflow-x-auto">
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 flex gap-1 border-t border-neutral-100 pt-1 overflow-x-auto">
             {[
               { id: 'dashboard', label: '売上・時間帯分析' },
               { id: 'orders', label: '調理・呼び出し管理' },
@@ -476,10 +495,10 @@ export default function AdminPage() {
         </header>
 
         {/* メインビュー */}
-        <main className="max-w-7xl mx-auto px-6 pt-6">
+        <main className="max-w-7xl mx-auto px-3 sm:px-6 pt-4 sm:pt-6">
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
-              <div className="bg-white rounded-2xl p-4 border border-neutral-200/80 shadow-sm">
+              <div className="bg-white rounded-2xl p-3 sm:p-4 border border-neutral-200/80 shadow-sm">
                 <div className="flex flex-wrap items-end gap-3">
                   <label className="text-xs font-bold text-neutral-600">
                     集計開始日
@@ -523,7 +542,7 @@ export default function AdminPage() {
                   <span className="text-[11px] text-neutral-400 pb-1">表示範囲に合わせてグラフとランキングを再集計します</span>
                 </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <div className="bg-white p-5 rounded-2xl border border-neutral-200/80 shadow-sm">
                   <span className="text-xs font-medium text-neutral-400">総売上額</span>
                   <p className="text-3xl font-extrabold text-neutral-900 mt-1">¥{totalSales.toLocaleString()}</p>
@@ -539,7 +558,7 @@ export default function AdminPage() {
               </div>
 
               {/* 時間帯グラフ */}
-              <div className="bg-white rounded-2xl p-6 border border-neutral-200/80 shadow-sm space-y-4">
+              <div className="bg-white rounded-2xl p-4 sm:p-6 border border-neutral-200/80 shadow-sm space-y-4">
                 <div className="flex justify-between items-center">
                   <div>
                     <h2 className="font-bold text-sm text-neutral-900">時間帯別売上推移</h2>
@@ -547,37 +566,97 @@ export default function AdminPage() {
                   </div>
                   <span className="text-xs font-medium text-neutral-500">単位: 円</span>
                 </div>
-                <div className="pt-6 pb-2">
-                  <div className="h-48 flex items-end justify-between gap-2 border-b border-neutral-200 px-2">
-                    {hourlyData.map((d) => {
-                      const heightPercent = maxHourlySales > 0 ? (d.sales / maxHourlySales) * 100 : 0;
-                      return (
-                        <div key={d.hour} className="flex-1 flex flex-col items-center gap-1 group relative">
-                          <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-10 bg-neutral-900 text-white text-[10px] py-1 px-2 rounded pointer-events-none whitespace-nowrap z-10 shadow-md">
-                            {d.hour} : ¥{d.sales.toLocaleString()} ({d.count}件)
-                          </div>
-                          <div className="w-full bg-neutral-100 rounded-t h-full flex items-end">
-                            <div
-                              style={{ height: `${Math.max(heightPercent, 2)}%` }}
-                              className={`w-full rounded-t transition-all duration-300 ${
-                                d.sales > 0 ? 'bg-neutral-800 group-hover:bg-neutral-600' : 'bg-neutral-200'
-                              }`}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="flex justify-between gap-2 px-2 pt-2 text-[10px] text-neutral-400 font-medium">
-                    {hourlyData.map((d) => (
-                      <div key={d.hour} className="flex-1 text-center">{d.hour}</div>
-                    ))}
+                <div className="pt-4 pb-2 overflow-x-auto">
+                  <div style={{ minWidth: `${chartMinWidth}px` }}>
+                    <svg
+                      viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                      width="100%"
+                      height="240"
+                      role="img"
+                      aria-label="時間帯別売上推移"
+                      className="block min-w-full overflow-visible"
+                    >
+                      {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+                        const y = chartPadding.top + chartInnerHeight * (1 - ratio);
+                        return (
+                          <line
+                            key={ratio}
+                            x1={chartPadding.left}
+                            x2={chartWidth - chartPadding.right}
+                            y1={y}
+                            y2={y}
+                            stroke="#E5E7EB"
+                            strokeWidth="1"
+                          />
+                        );
+                      })}
+                      <polyline
+                        points={chartPolyline}
+                        fill="none"
+                        stroke="#111827"
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      {chartPoints.map((point) => (
+                        <g
+                          key={point.hour}
+                          onMouseEnter={() => setHoveredChartPoint(point)}
+                          onMouseLeave={() => setHoveredChartPoint(null)}
+                          onClick={() => setHoveredChartPoint(point)}
+                          className="cursor-pointer"
+                        >
+                          <circle cx={point.x} cy={point.y} r="5" fill="#111827" />
+                          <circle cx={point.x} cy={point.y} r="14" fill="transparent" />
+                          <text x={point.x} y={chartHeight - 10} textAnchor="middle" fontSize="11" fill="#6B7280">
+                            {point.hour}
+                          </text>
+                          <title>{`${point.hour}: ¥${point.sales.toLocaleString()} (${point.count}件)`}</title>
+                        </g>
+                      ))}
+                      {hoveredChartPoint && (
+                        <g pointerEvents="none">
+                          <rect
+                            x={Math.min(Math.max(hoveredChartPoint.x - 70, 4), chartWidth - 144)}
+                            y={Math.max(hoveredChartPoint.y - 58, 4)}
+                            width="140"
+                            height="38"
+                            rx="6"
+                            fill="#111827"
+                          />
+                          <text
+                            x={Math.min(Math.max(hoveredChartPoint.x, 74), chartWidth - 74)}
+                            y={Math.max(hoveredChartPoint.y - 36, 26)}
+                            textAnchor="middle"
+                            fontSize="11"
+                            fontWeight="700"
+                            fill="white"
+                          >
+                            {`${hoveredChartPoint.hour}  ¥${hoveredChartPoint.sales.toLocaleString()}`}
+                          </text>
+                          <text
+                            x={Math.min(Math.max(hoveredChartPoint.x, 74), chartWidth - 74)}
+                            y={Math.max(hoveredChartPoint.y - 21, 41)}
+                            textAnchor="middle"
+                            fontSize="10"
+                            fill="#D1D5DB"
+                          >
+                            {`${hoveredChartPoint.count}件`}
+                          </text>
+                        </g>
+                      )}
+                    </svg>
+                    {validOrders.length > 0 && hourlyData.every((data) => data.sales === 0) && (
+                      <p className="text-center text-xs text-neutral-400 -mt-8 pb-4">
+                        選択した時間帯には売上データがありません
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
 
               {/* ランキング */}
-              <div className="bg-white rounded-2xl p-6 border border-neutral-200/80 shadow-sm space-y-4">
+              <div className="bg-white rounded-2xl p-4 sm:p-6 border border-neutral-200/80 shadow-sm space-y-4">
                 <h2 className="font-bold text-sm text-neutral-900">商品別販売実績ランキング</h2>
                 <div className="divide-y divide-neutral-100">
                   {productSalesMap.length === 0 ? (
@@ -653,7 +732,7 @@ export default function AdminPage() {
           )}
 
           {activeTab === 'history' && (
-            <div className="bg-white rounded-2xl p-6 border border-neutral-200/80 shadow-sm space-y-4">
+            <div className="bg-white rounded-2xl p-4 sm:p-6 border border-neutral-200/80 shadow-sm space-y-4">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div>
                   <h2 className="font-bold text-sm text-neutral-900">注文履歴一覧</h2>

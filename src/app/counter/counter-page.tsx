@@ -92,9 +92,9 @@ export default function CounterPage() {
       {/* 管理画面・レジ画面と統一されたヘッダーUI */}
       {/* ========================================================= */}
       <header className="bg-white border-b border-neutral-200 sticky top-0 z-20 shadow-sm">
-        <div className="max-w-[1400px] mx-auto px-6 py-3 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <h1 className="text-lg font-bold tracking-tight text-neutral-900">
+        <div className="max-w-[1400px] mx-auto px-3 sm:px-6 py-3 flex flex-col sm:flex-row gap-3 sm:gap-0 sm:justify-between sm:items-center">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <h1 className="text-base sm:text-lg font-bold tracking-tight text-neutral-900">
               文化祭POS
             </h1>
             <span className="bg-emerald-50 text-emerald-600 text-xs font-bold px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1.5">
@@ -106,16 +106,16 @@ export default function CounterPage() {
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <Link
               href="/"
-              className="text-xs bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-medium px-3 py-1.5 rounded-lg transition"
+              className="text-xs bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-medium px-2.5 sm:px-3 py-1.5 rounded-lg transition"
             >
               レジ画面へ
             </Link>
             <Link
               href="/admin"
-              className="bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-medium px-3.5 py-1.5 rounded-lg transition shadow-sm"
+              className="bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-medium px-2.5 sm:px-3.5 py-1.5 rounded-lg transition shadow-sm"
             >
               管理画面へ
             </Link>
@@ -126,9 +126,9 @@ export default function CounterPage() {
       {/* ========================================================= */}
       {/* メインエリア：カウンター進行状況表示 */}
       {/* ========================================================= */}
-      <main className="max-w-[1400px] mx-auto px-6 py-6 flex-1 w-full grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <main className="max-w-[1400px] mx-auto px-3 sm:px-6 py-4 sm:py-6 flex-1 w-full grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 items-start">
         {/* ① 準備中・調理中カラム */}
-        <section className="lg:col-span-5 bg-white rounded-3xl p-5 border border-neutral-200/80 shadow-sm min-h-[600px] flex flex-col">
+        <section className="lg:col-span-5 bg-white rounded-3xl p-4 sm:p-5 border border-neutral-200/80 shadow-sm min-h-[420px] lg:min-h-[600px] flex flex-col">
           <div className="flex justify-between items-center pb-4 mb-4 border-b border-neutral-100">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
@@ -179,7 +179,7 @@ export default function CounterPage() {
         </section>
 
         {/* ② 呼び出し中・受け渡し待ちカラム */}
-        <section className="lg:col-span-4 bg-white rounded-3xl p-5 border border-neutral-200/80 shadow-sm min-h-[600px] flex flex-col">
+        <section className="lg:col-span-4 bg-white rounded-3xl p-4 sm:p-5 border border-neutral-200/80 shadow-sm min-h-[420px] lg:min-h-[600px] flex flex-col">
           <div className="flex justify-between items-center pb-4 mb-4 border-b border-neutral-100">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
@@ -230,7 +230,7 @@ export default function CounterPage() {
         </section>
 
         {/* ③ 完了履歴カラム */}
-        <section className="lg:col-span-3 bg-white rounded-3xl p-5 border border-neutral-200/80 shadow-sm min-h-[600px] flex flex-col">
+        <section className="lg:col-span-3 bg-white rounded-3xl p-4 sm:p-5 border border-neutral-200/80 shadow-sm min-h-[360px] lg:min-h-[600px] flex flex-col">
           <div className="flex justify-between items-center pb-4 mb-4 border-b border-neutral-100">
             <h2 className="font-bold text-base text-neutral-900">受け渡し完了</h2>
             <span className="text-xs text-neutral-400 font-medium">直近の履歴</span>
