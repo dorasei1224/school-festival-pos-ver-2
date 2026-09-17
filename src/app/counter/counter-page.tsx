@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type PointerEvent } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
@@ -14,7 +14,7 @@ interface Order {
   orderNumber: number;
   time: string;
   items: OrderItem[];
-  status: 'preparing' | 'calling' | 'completed';
+  status: 'preparing' | 'completed';
 }
 
 interface DatabaseOrder {
@@ -32,6 +32,9 @@ interface DatabaseOrder {
 export default function CounterPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [activeView, setActiveView] = useState<'board' | 'history'>('board');
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [swipeStartX, setSwipeStartX] = useState<number | null>(null);
+  const [swipeOffset, setSwipeOffset] = useState(0);
 
   const fetchOrders = useCallback(async () => {
     const { data, error } = await supabase
@@ -54,7 +57,7 @@ export default function CounterPage() {
         name: Array.isArray(item.product) ? item.product[0]?.name || '商品' : item.product?.name || '商品',
         quantity: item.quantity,
       })),
-      status: order.status.toLowerCase() === 'pending' ? 'preparing' : order.status.toLowerCase() === 'ready' ? 'calling' : 'completed',
+      status: order.status.toLowerCase() === 'completed' ? 'completed' : 'preparing',
     } satisfies Order));
     setOrders(databaseOrders);
   }, []);
@@ -73,8 +76,8 @@ export default function CounterPage() {
   }, [fetchOrders]);
 
   // ステータス更新処理
-  const updateStatus = async (orderId: string, newStatus: 'preparing' | 'calling' | 'completed') => {
-    const databaseStatus = newStatus === 'preparing' ? 'pending' : newStatus === 'calling' ? 'ready' : 'completed';
+  const updateStatus = async (orderId: string, newStatus: 'preparing' | 'completed') => {
+    const databaseStatus = newStatus === 'preparing' ? 'pending' : 'completed';
     const { error } = await supabase.from('orders').update({ status: databaseStatus }).eq('id', orderId);
     if (error) {
       alert(`受け渡し状態の更新に失敗しました: ${error.message}`);
@@ -83,8 +86,27 @@ export default function CounterPage() {
     await fetchOrders();
   };
 
+  const handleSwipeStart = (event: PointerEvent<HTMLDivElement>) => {
+    setSwipeStartX(event.clientX);
+    setSwipeOffset(0);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleSwipeMove = (event: PointerEvent<HTMLDivElement>) => {
+    if (swipeStartX === null) return;
+    setSwipeOffset(Math.max(0, Math.min(event.clientX - swipeStartX, 260)));
+  };
+
+  const handleSwipeEnd = (orderId: string) => {
+    if (swipeOffset >= 160) {
+      void updateStatus(orderId, 'completed');
+    } else {
+      setSwipeOffset(0);
+    }
+    setSwipeStartX(null);
+  };
+
   const preparingOrders = orders.filter((o) => o.status === 'preparing');
-  const callingOrders = orders.filter((o) => o.status === 'calling');
   const completedOrders = orders.filter((o) => o.status === 'completed');
   const recentCompletedOrders = completedOrders.slice(-5).reverse();
 
@@ -96,9 +118,14 @@ export default function CounterPage() {
       <header className="bg-white border-b border-neutral-200 sticky top-0 z-20 shadow-sm">
         <div className="max-w-[1400px] mx-auto px-3 sm:px-6 py-3 flex flex-col sm:flex-row gap-3 sm:gap-0 sm:justify-between sm:items-center">
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <h1 className="text-base sm:text-lg font-bold tracking-tight text-neutral-900">
-              文化祭POS
-            </h1>
+            <div className="flex flex-col leading-none">
+              <span className="text-base sm:text-lg font-black tracking-tight text-neutral-900">
+                つぐポス
+              </span>
+              <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-neutral-400">
+                counter
+              </span>
+            </div>
             <span className="bg-emerald-50 text-emerald-600 text-xs font-bold px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
               オンライン
@@ -172,6 +199,7 @@ export default function CounterPage() {
               preparingOrders.map((order) => (
                 <div
                   key={order.id}
+                  onClick={() => setSelectedOrderId(order.id)}
                   className="bg-neutral-50 rounded-2xl p-4 border border-neutral-200/80 shadow-sm flex flex-col justify-between"
                 >
                   <div>
@@ -192,67 +220,61 @@ export default function CounterPage() {
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => updateStatus(order.id, 'calling')}
-                    className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl transition shadow-sm"
-                  >
-                    準備完了 (呼び出しへ)
-                  </button>
+                  <p className="w-full py-2.5 bg-amber-500 text-white text-center font-bold text-xs rounded-xl shadow-sm">注文番号をタップして完了操作へ</p>
                 </div>
               ))
             )}
           </div>
         </section>
 
-        {/* ② 呼び出し中・受け渡し待ちカラム */}
+        {/* ② 注文番号タップ後の完了操作 */}
         <section className="lg:col-span-4 bg-white rounded-3xl p-4 sm:p-5 border border-neutral-200/80 shadow-sm min-h-[420px] lg:min-h-[600px] flex flex-col">
           <div className="flex justify-between items-center pb-4 mb-4 border-b border-neutral-100">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-              <h2 className="font-bold text-base text-neutral-900">呼び出し中 (受け渡し可)</h2>
+              <span className="w-2.5 h-2.5 rounded-full bg-neutral-900"></span>
+              <h2 className="font-bold text-base text-neutral-900">受け渡し操作</h2>
             </div>
-            <span className="bg-emerald-50 text-emerald-700 text-xs font-bold px-2.5 py-0.5 rounded-full border border-emerald-200">
-              {callingOrders.length}件
-            </span>
+            <span className="text-xs text-neutral-400">番号をタップ</span>
           </div>
 
-          <div className="space-y-4 flex-1 overflow-y-auto pr-1">
-            {callingOrders.length === 0 ? (
-              <p className="text-xs text-neutral-400 text-center py-20">呼び出し中の注文はありません</p>
-            ) : (
-              callingOrders.map((order) => (
-                <div
-                  key={order.id}
-                  className="bg-emerald-50/50 rounded-2xl p-4 border border-emerald-200/80 shadow-sm flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex justify-between items-start mb-2">
-                      <span className="text-3xl font-black text-emerald-600">
-                        No. {order.orderNumber}
-                      </span>
-                      <span className="text-xs text-neutral-400 font-medium">{order.time}</span>
-                    </div>
-
-                    <div className="space-y-1 mb-4">
-                      {order.items.map((item, idx) => (
-                        <div key={idx} className="flex justify-between text-xs font-bold text-neutral-800">
-                          <span>{item.name}</span>
-                          <span className="text-neutral-500">× {item.quantity}</span>
-                        </div>
-                      ))}
-                    </div>
+          {!selectedOrderId ? (
+            <p className="text-xs text-neutral-400 text-center py-20">準備中の注文番号をタップしてください</p>
+          ) : (() => {
+            const selectedOrder = preparingOrders.find((order) => order.id === selectedOrderId);
+            if (!selectedOrder) return <p className="text-xs text-neutral-400 text-center py-20">注文を選択してください</p>;
+            return (
+              <div className="flex-1 flex flex-col justify-between">
+                <div>
+                  <p className="text-xs text-neutral-500 font-bold">選択中の注文</p>
+                  <p className="text-5xl font-black text-neutral-900 mt-2">No. {selectedOrder.orderNumber}</p>
+                  <div className="mt-5 space-y-2">
+                    {selectedOrder.items.map((item, index) => (
+                      <div key={index} className="flex justify-between text-sm font-bold text-neutral-700">
+                        <span>{item.name}</span><span>× {item.quantity}</span>
+                      </div>
+                    ))}
                   </div>
-
-                  <button
-                    onClick={() => updateStatus(order.id, 'completed')}
-                    className="w-full py-3 bg-neutral-900 hover:bg-neutral-800 text-white font-bold text-xs rounded-xl transition shadow-md"
-                  >
-                    商品を渡して完了
-                  </button>
                 </div>
-              ))
-            )}
-          </div>
+                <div className="mt-8">
+                  <p className="text-center text-xs text-neutral-500 mb-2">右へスワイプして受け渡し完了</p>
+                  <div
+                    className="relative h-14 rounded-full bg-neutral-100 border border-neutral-200 overflow-hidden touch-pan-y select-none"
+                    onPointerDown={handleSwipeStart}
+                    onPointerMove={handleSwipeMove}
+                    onPointerUp={() => handleSwipeEnd(selectedOrder.id)}
+                    onPointerCancel={() => handleSwipeEnd(selectedOrder.id)}
+                  >
+                    <div className="absolute inset-0 flex items-center justify-center text-xs font-bold text-neutral-400">完了する</div>
+                    <div
+                      className="absolute top-1 left-1 h-12 w-12 rounded-full bg-neutral-900 text-white flex items-center justify-center font-bold transition-transform"
+                      style={{ transform: `translateX(${swipeOffset}px)` }}
+                    >→</div>
+                  </div>
+                  <button type="button" onClick={() => setSelectedOrderId(null)} className="w-full mt-3 text-xs text-neutral-500 hover:text-neutral-900 underline">選択を解除</button>
+                </div>
+              </div>
+            );
+          })()}
         </section>
 
         {/* ③ 完了履歴カラム */}
@@ -280,7 +302,7 @@ export default function CounterPage() {
                     </span>
                   </div>
                   <button
-                    onClick={() => updateStatus(order.id, 'calling')}
+                    onClick={() => updateStatus(order.id, 'preparing')}
                     className="text-[10px] text-neutral-500 hover:text-neutral-900 underline font-medium"
                   >
                     戻す
@@ -323,7 +345,7 @@ export default function CounterPage() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => updateStatus(order.id, 'calling')}
+                      onClick={() => updateStatus(order.id, 'preparing')}
                       className="shrink-0 text-xs text-neutral-600 hover:text-neutral-900 underline font-bold"
                     >
                       呼び出し中に戻す

@@ -136,6 +136,7 @@ export default function AdminPage() {
   const [cashCounts, setCashCounts] = useState<{ [key: number]: number }>({
     10000: 0, 5000: 0, 2000: 0, 1000: 0, 500: 0, 100: 0, 50: 0, 10: 0, 5: 0, 1: 0,
   });
+  const [inventoryDrafts, setInventoryDrafts] = useState<Record<string, string>>({});
 
   const isAdminAccess = Boolean(currentStaff && currentStaff.role === 'admin');
 
@@ -303,17 +304,38 @@ export default function AdminPage() {
     if (!product) return;
 
     const newStock = Math.max(0, product.stock + delta);
-    const { error } = await supabase
-      .from('products')
-      .update({ stock: newStock })
-      .eq('id', productId);
+    const { error } = await supabase.from('products').update({ stock: newStock }).eq('id', productId);
 
     if (error) {
       alert(`在庫数の更新に失敗しました: ${error.message}`);
       console.error(error);
     } else {
-      await fetchData();
+      setProducts((currentProducts) => currentProducts.map((item) => (
+        item.id === productId ? { ...item, stock: newStock } : item
+      )));
+      setInventoryDrafts((drafts) => ({ ...drafts, [productId]: String(newStock) }));
     }
+  };
+
+  const updateStockValue = async (productId: string, rawValue: string) => {
+    const newStock = Math.max(0, Number.parseInt(rawValue, 10) || 0);
+    const product = products.find((item) => item.id === productId);
+    if (!product || newStock === product.stock) {
+      setInventoryDrafts((drafts) => ({ ...drafts, [productId]: String(product?.stock ?? newStock) }));
+      return;
+    }
+
+    const { error } = await supabase.from('products').update({ stock: newStock }).eq('id', productId);
+    if (error) {
+      alert(`在庫数の更新に失敗しました: ${error.message}`);
+      setInventoryDrafts((drafts) => ({ ...drafts, [productId]: String(product.stock) }));
+      return;
+    }
+
+    setProducts((currentProducts) => currentProducts.map((item) => (
+      item.id === productId ? { ...item, stock: newStock } : item
+    )));
+    setInventoryDrafts((drafts) => ({ ...drafts, [productId]: String(newStock) }));
   };
 
   const handlePrintPDF = () => {
@@ -441,9 +463,14 @@ export default function AdminPage() {
         <header className="bg-white border-b border-neutral-200/80 sticky top-0 z-10 shadow-sm">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3.5 flex flex-col sm:flex-row gap-3 sm:gap-0 sm:justify-between sm:items-center">
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              <h1 className="text-base sm:text-lg font-bold tracking-tight text-neutral-900">
-                文化祭POS 管理システム
-              </h1>
+              <div className="flex flex-col leading-none">
+                <span className="text-base sm:text-lg font-black tracking-tight text-neutral-900">
+                  つぐポス
+                </span>
+                <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-neutral-400">
+                  admin
+                </span>
+              </div>
               <span className="bg-neutral-100 text-neutral-600 text-xs font-semibold px-2.5 py-0.5 rounded-md border border-neutral-200">
                 管理画面
               </span>
@@ -895,16 +922,29 @@ export default function AdminPage() {
               <h2 className="font-bold text-sm text-neutral-900">商品在庫数の一括調整</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {products.map((product) => (
-                  <div key={product.id} className="p-4 rounded-xl border border-neutral-200/80 bg-neutral-50/50 flex justify-between items-center">
+                  <div key={product.id} className="p-4 rounded-xl border border-neutral-200/80 bg-neutral-50/50 flex justify-between items-center min-w-0">
                     <div>
                       <span className="text-[10px] font-bold uppercase text-neutral-400">{product.category}</span>
                       <h3 className="font-bold text-sm text-neutral-900">{product.name}</h3>
                       <p className="text-xs text-neutral-500">価格: {product.current_price}円</p>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 shrink-0">
                       <div className="text-right">
                         <span className="text-[10px] font-medium text-neutral-400 block">現在の在庫</span>
-                        <span className={`text-lg font-black ${product.stock <= 5 ? 'text-rose-600' : 'text-neutral-900'}`}>{product.stock}</span>
+                        <input
+                          type="number"
+                          min="0"
+                          aria-label={`${product.name}の在庫数`}
+                          value={inventoryDrafts[product.id] ?? String(product.stock)}
+                          onChange={(event) => setInventoryDrafts((drafts) => ({ ...drafts, [product.id]: event.target.value }))}
+                          onBlur={(event) => void updateStockValue(product.id, event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.currentTarget.blur();
+                            }
+                          }}
+                          className={`w-16 text-right text-lg font-black bg-transparent border-b border-neutral-300 focus:outline-none focus:border-neutral-900 ${product.stock <= 5 ? 'text-rose-600' : 'text-neutral-900'}`}
+                        />
                       </div>
                       <div className="flex gap-1">
                         <button onClick={() => updateStock(product.id, -1)} className="px-2 py-1 bg-white border border-neutral-200 text-neutral-700 font-bold rounded text-xs hover:bg-neutral-100">-1</button>

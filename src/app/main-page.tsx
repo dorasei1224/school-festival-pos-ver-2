@@ -251,7 +251,12 @@ export default function RegisterPage() {
       <header className="bg-white border-b border-neutral-200 sticky top-0 z-20 shadow-sm print:hidden">
         <div className="max-w-[1400px] mx-auto px-3 sm:px-6 py-3 flex flex-col sm:flex-row gap-3 sm:gap-0 sm:justify-between sm:items-center">
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <h1 className="text-base sm:text-lg font-bold tracking-tight text-neutral-900">文化祭POS</h1>
+            <div className="flex flex-col leading-none">
+              <span className="text-base sm:text-lg font-black tracking-tight text-neutral-900">つぐポス</span>
+              <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-neutral-400">
+                festival POS
+              </span>
+            </div>
 
             {isOnline ? (
               <span className="bg-emerald-50 text-emerald-600 text-xs font-bold px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1.5">

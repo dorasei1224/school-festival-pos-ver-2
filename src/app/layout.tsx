@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "文化祭POS",
-  description: "文化祭向けのオフライン対応POSレジアプリ",
+  title: "つぐポス",
+  description: "文化祭向けのPOSレジアプリ",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
