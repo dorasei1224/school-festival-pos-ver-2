@@ -169,7 +169,23 @@ function ReceiptContent() {
         {/* 保存・アクションボタン（印刷時は非表示） */}
         <div className="mt-6 pt-4 border-t border-neutral-100 space-y-2 no-print">
           <button
-            onClick={() => window.print()}
+            onClick={() => {
+              const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent)
+                || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+              if (isIOS) {
+                const printWindow = window.open('', '_blank', 'noopener,noreferrer');
+                if (printWindow) {
+                  printWindow.document.write(`<!doctype html><html><head><title>レシート</title><meta charset="utf-8" /><style>body{font-family:sans-serif;margin:24px;color:#111827}h1{font-size:24px;margin-bottom:8px}p{margin:8px 0}@media print{body{margin:0}}</style></head><body>${document.documentElement.outerHTML}</body></html>`);
+                  printWindow.document.close();
+                  printWindow.focus();
+                  setTimeout(() => printWindow.print(), 300);
+                  return;
+                }
+              }
+
+              window.print();
+            }}
             className="w-full py-3 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold rounded-2xl transition flex items-center justify-center gap-2 shadow-sm"
           >
             <span></span> レシートを保存する (PDF / 印刷)

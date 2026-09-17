@@ -339,6 +339,33 @@ export default function AdminPage() {
   };
 
   const handlePrintPDF = () => {
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    if (isIOS) {
+      const printWindow = window.open('', '_blank', 'noopener,noreferrer');
+      if (printWindow) {
+        const printableHtml = `<!doctype html><html><head><title>日計レポート</title>
+          <meta charset="utf-8" />
+          <style>
+            body { font-family: sans-serif; margin: 24px; color: #111827; }
+            h1 { font-size: 24px; margin-bottom: 16px; }
+            .meta { color: #4b5563; margin-bottom: 12px; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; }
+            @media print { body { margin: 0; } }
+          </style></head><body>${document.documentElement.outerHTML}</body></html>`;
+
+        printWindow.document.write(printableHtml);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+          printWindow.print();
+        }, 300);
+        return;
+      }
+    }
+
     window.print();
   };
 

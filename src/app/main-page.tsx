@@ -626,7 +626,23 @@ export default function RegisterPage() {
 
             <div className="mt-5 flex gap-2 print:hidden">
               <button
-                onClick={() => window.print()}
+                onClick={() => {
+                  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent)
+                    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+                  if (isIOS) {
+                    const printWindow = window.open('', '_blank', 'noopener,noreferrer');
+                    if (printWindow) {
+                      printWindow.document.write(`<!doctype html><html><head><title>領収証</title><meta charset="utf-8" /><style>body{font-family:sans-serif;margin:24px;color:#111827}h1{font-size:24px;margin-bottom:8px}p{margin:8px 0}@media print{body{margin:0}}</style></head><body>${document.documentElement.outerHTML}</body></html>`);
+                      printWindow.document.close();
+                      printWindow.focus();
+                      setTimeout(() => printWindow.print(), 300);
+                      return;
+                    }
+                  }
+
+                  window.print();
+                }}
                 className="flex-1 py-3 bg-neutral-900 hover:bg-neutral-800 text-white font-bold text-xs rounded-xl transition shadow"
               >
               印刷する
