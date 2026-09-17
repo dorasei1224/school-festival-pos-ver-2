@@ -626,7 +626,36 @@ export default function RegisterPage() {
 
             <div className="mt-5 flex gap-2 print:hidden">
               <button
-                onClick={() => window.print()}
+                onClick={() => {
+                  const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+                    || (window.navigator as Navigator & { standalone?: boolean }).standalone;
+
+                  if (isStandalone) {
+                    const frame = document.createElement('iframe');
+                    frame.style.position = 'fixed';
+                    frame.style.right = '0';
+                    frame.style.bottom = '0';
+                    frame.style.width = '0';
+                    frame.style.height = '0';
+                    frame.style.border = '0';
+                    frame.style.opacity = '0';
+                    frame.setAttribute('aria-hidden', 'true');
+                    frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8" /><title>領収証</title><style>body{font-family:sans-serif;margin:24px;color:#111827}p{margin:8px 0}@media print{body{margin:0}}</style></head><body>${document.body.innerHTML}</body></html>`;
+                    document.body.appendChild(frame);
+                    frame.onload = () => {
+                      try {
+                        frame.contentWindow?.focus();
+                        frame.contentWindow?.print();
+                      } catch (error) {
+                        console.error('Standalone print fallback failed:', error);
+                      }
+                      setTimeout(() => document.body.removeChild(frame), 1200);
+                    };
+                    return;
+                  }
+
+                  window.print();
+                }}
                 className="flex-1 py-3 bg-neutral-900 hover:bg-neutral-800 text-white font-bold text-xs rounded-xl transition shadow"
               >
               印刷する

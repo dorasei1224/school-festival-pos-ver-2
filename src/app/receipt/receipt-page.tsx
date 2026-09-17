@@ -169,7 +169,36 @@ function ReceiptContent() {
         {/* 保存・アクションボタン（印刷時は非表示） */}
         <div className="mt-6 pt-4 border-t border-neutral-100 space-y-2 no-print">
           <button
-            onClick={() => window.print()}
+            onClick={() => {
+              const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+                || (window.navigator as Navigator & { standalone?: boolean }).standalone;
+
+              if (isStandalone) {
+                const frame = document.createElement('iframe');
+                frame.style.position = 'fixed';
+                frame.style.right = '0';
+                frame.style.bottom = '0';
+                frame.style.width = '0';
+                frame.style.height = '0';
+                frame.style.border = '0';
+                frame.style.opacity = '0';
+                frame.setAttribute('aria-hidden', 'true');
+                frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8" /><title>レシート</title><style>body{font-family:sans-serif;margin:24px;color:#111827}p{margin:8px 0}@media print{body{margin:0}}</style></head><body>${document.body.innerHTML}</body></html>`;
+                document.body.appendChild(frame);
+                frame.onload = () => {
+                  try {
+                    frame.contentWindow?.focus();
+                    frame.contentWindow?.print();
+                  } catch (error) {
+                    console.error('Standalone print fallback failed:', error);
+                  }
+                  setTimeout(() => document.body.removeChild(frame), 1200);
+                };
+                return;
+              }
+
+              window.print();
+            }}
             className="w-full py-3 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold rounded-2xl transition flex items-center justify-center gap-2 shadow-sm"
           >
             <span></span> レシートを保存する (PDF / 印刷)

@@ -339,6 +339,33 @@ export default function AdminPage() {
   };
 
   const handlePrintPDF = () => {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+      || (window.navigator as Navigator & { standalone?: boolean }).standalone;
+
+    if (isStandalone) {
+      const frame = document.createElement('iframe');
+      frame.style.position = 'fixed';
+      frame.style.right = '0';
+      frame.style.bottom = '0';
+      frame.style.width = '0';
+      frame.style.height = '0';
+      frame.style.border = '0';
+      frame.style.opacity = '0';
+      frame.setAttribute('aria-hidden', 'true');
+      frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8" /><title>日計レポート</title><style>body{font-family:sans-serif;margin:24px;color:#111827}table{width:100%;border-collapse:collapse}th,td{border:1px solid #e5e7eb;padding:8px;text-align:left}@media print{body{margin:0}}</style></head><body>${document.body.innerHTML}</body></html>`;
+      document.body.appendChild(frame);
+      frame.onload = () => {
+        try {
+          frame.contentWindow?.focus();
+          frame.contentWindow?.print();
+        } catch (error) {
+          console.error('Standalone print fallback failed:', error);
+        }
+        setTimeout(() => document.body.removeChild(frame), 1200);
+      };
+      return;
+    }
+
     window.print();
   };
 
