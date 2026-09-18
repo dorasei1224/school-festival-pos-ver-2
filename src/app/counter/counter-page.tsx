@@ -140,14 +140,24 @@ export default function CounterPage() {
 
   useEffect(() => {
     void Promise.resolve().then(() => fetchOrders());
+
+    const pollingId = window.setInterval(() => {
+      void fetchOrders();
+    }, 3000);
+
     const channel = supabase
       .channel('counter-orders-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchOrders())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, () => fetchOrders())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'waiting_cards' }, () => fetchOrders())
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('[Realtime fallback] counter channel unavailable, using polling.');
+        }
+      });
 
     return () => {
+      window.clearInterval(pollingId);
       supabase.removeChannel(channel);
     };
   }, [fetchOrders]);
@@ -226,6 +236,12 @@ export default function CounterPage() {
               className="text-xs bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-medium px-2.5 sm:px-3 py-1.5 rounded-lg transition"
             >
               レジ画面へ
+            </Link>
+            <Link
+              href="/kitchen"
+              className="text-xs bg-amber-50 hover:bg-amber-100 text-amber-700 font-medium px-2.5 sm:px-3 py-1.5 rounded-lg transition border border-amber-200"
+            >
+              厨房画面
             </Link>
             <Link
               href="/admin"

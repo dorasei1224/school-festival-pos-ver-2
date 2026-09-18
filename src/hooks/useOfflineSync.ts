@@ -29,6 +29,7 @@ interface SaveOrderResult {
   synced: boolean;
   orderNumber?: number;
   orderId?: string;
+  duplicate?: boolean;
 }
 
 export function useOfflineSync() {
@@ -40,6 +41,7 @@ export function useOfflineSync() {
 
   // 二重同期防止フラグ
   const isSyncingRef = useRef(false);
+  const orderSubmissionLocks = useRef<Set<string>>(new Set());
 
   // ローカルストレージからの読み込み
   const loadLocalData = useCallback(() => {
@@ -186,25 +188,41 @@ export function useOfflineSync() {
 
   // 新規注文保存
   const saveOrder = useCallback(async (order: OrderData): Promise<SaveOrderResult> => {
-    if (navigator.onLine) {
-      const result = await sendOrderToServer(order);
-      if (result.success) {
-        const syncedOrder = {
-          ...order,
-          id: result.orderId ?? order.id,
-          orderNumber: result.orderNumber ?? order.orderNumber,
-        };
-        saveCompletedLocal(syncedOrder);
-        return { success: true, synced: true, orderNumber: syncedOrder.orderNumber, orderId: syncedOrder.id };
-      }
+    if (orderSubmissionLocks.current.has(order.id)) {
+      return {
+        success: false,
+        synced: false,
+        orderNumber: order.orderNumber,
+        orderId: order.id,
+        duplicate: true,
+      };
     }
 
-    const saved = localStorage.getItem(PENDING_KEY);
-    const currentQueue: OrderData[] = saved ? JSON.parse(saved) : [];
-    const updated = [...currentQueue, order];
-    localStorage.setItem(PENDING_KEY, JSON.stringify(updated));
-    setPendingOrders(updated);
-    return { success: true, synced: false, orderNumber: order.orderNumber, orderId: order.id };
+    orderSubmissionLocks.current.add(order.id);
+
+    try {
+      if (navigator.onLine) {
+        const result = await sendOrderToServer(order);
+        if (result.success) {
+          const syncedOrder = {
+            ...order,
+            id: result.orderId ?? order.id,
+            orderNumber: result.orderNumber ?? order.orderNumber,
+          };
+          saveCompletedLocal(syncedOrder);
+          return { success: true, synced: true, orderNumber: syncedOrder.orderNumber, orderId: syncedOrder.id };
+        }
+      }
+
+      const saved = localStorage.getItem(PENDING_KEY);
+      const currentQueue: OrderData[] = saved ? JSON.parse(saved) : [];
+      const updated = [...currentQueue, order];
+      localStorage.setItem(PENDING_KEY, JSON.stringify(updated));
+      setPendingOrders(updated);
+      return { success: true, synced: false, orderNumber: order.orderNumber, orderId: order.id };
+    } finally {
+      orderSubmissionLocks.current.delete(order.id);
+    }
   }, [sendOrderToServer, saveCompletedLocal]);
 
   return {

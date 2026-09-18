@@ -57,6 +57,7 @@ export default function RegisterPage() {
   const [selectedWaitingNumber, setSelectedWaitingNumber] = useState<number | null>(null);
   const [waitingCards, setWaitingCards] = useState<WaitingCard[]>([]);
   const [activeOrderKey, setActiveOrderKey] = useState<string | null>(null);
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState<boolean>(false);
 
   const [showReceiptModal, setShowReceiptModal] = useState<boolean>(false);
   const [customerName, setCustomerName] = useState<string>('上様');
@@ -272,6 +273,8 @@ export default function RegisterPage() {
   };
 
   const handleCompleteOrder = async () => {
+    if (isSubmittingOrder) return;
+
     const nowIso = new Date().toISOString();
     const nowFormatted = new Date().toLocaleString('ja-JP', {
       month: '2-digit',
@@ -280,58 +283,67 @@ export default function RegisterPage() {
       minute: '2-digit',
     });
     setCompletedAt(nowFormatted);
+    setIsSubmittingOrder(true);
 
-    const newOrder: OrderData = {
-      id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `order_${Date.now()}`,
-      orderNumber,
-      staffName,
-      staffId: currentStaff?.id ?? 'unknown-staff',
-      items: cart.map((c) => ({
-        productId: c.product.id,
-        name: c.product.name,
-        price: c.product.price,
-        quantity: c.quantity,
-      })),
-      subtotal,
-      discount: bundleDiscount + couponDiscount,
-      finalTotal,
-      receivedAmount: receivedAmount || 0,
-      changeAmount,
-      createdAt: nowIso,
-    };
+    try {
+      const newOrder: OrderData = {
+        id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `order_${Date.now()}`,
+        orderNumber,
+        staffName,
+        staffId: currentStaff?.id ?? 'unknown-staff',
+        items: cart.map((c) => ({
+          productId: c.product.id,
+          name: c.product.name,
+          price: c.product.price,
+          quantity: c.quantity,
+        })),
+        subtotal,
+        discount: bundleDiscount + couponDiscount,
+        finalTotal,
+        receivedAmount: receivedAmount || 0,
+        changeAmount,
+        createdAt: nowIso,
+      };
 
-    const targetWaitingNumber = selectedWaitingNumber;
-    setSelectedWaitingNumber(null);
+      const targetWaitingNumber = selectedWaitingNumber;
+      setSelectedWaitingNumber(null);
 
-    const saveResult = await saveOrder(newOrder);
-    const persistedOrderKey = saveResult.orderId ?? newOrder.id;
-    const assignedWaitingNumber = await reserveWaitingCard(persistedOrderKey, targetWaitingNumber);
-    const refreshedCards = await loadWaitingCardsFromSupabase();
-    setWaitingCards(refreshedCards);
+      const saveResult = await saveOrder(newOrder);
+      if (saveResult.duplicate || !saveResult.success) {
+        return;
+      }
 
-    if (assignedWaitingNumber === null && refreshedCards.filter((card) => card.status === 'available').length === 0) {
-      alert('利用可能な待合番号がありません。管理画面で待合カードを追加してください。');
-      return;
+      const persistedOrderKey = saveResult.orderId ?? newOrder.id;
+      const assignedWaitingNumber = await reserveWaitingCard(persistedOrderKey, targetWaitingNumber);
+      const refreshedCards = await loadWaitingCardsFromSupabase();
+      setWaitingCards(refreshedCards);
+
+      if (assignedWaitingNumber === null && refreshedCards.filter((card) => card.status === 'available').length === 0) {
+        alert('利用可能な待合番号がありません。管理画面で待合カードを追加してください。');
+        return;
+      }
+
+      if (saveResult.synced && saveResult.orderNumber) {
+        setOrderNumber(saveResult.orderNumber);
+      }
+
+      setActiveOrderKey(persistedOrderKey);
+      setSelectedWaitingNumber(assignedWaitingNumber ?? null);
+
+      setProducts((prev) =>
+        prev.map((prod) => {
+          const itemInCart = cart.find((c) => c.product.id === prod.id);
+          if (itemInCart) {
+            return { ...prod, stock: Math.max(0, prod.stock - itemInCart.quantity) };
+          }
+          return prod;
+        })
+      );
+
+      setStep('completed');
+    } finally {
+      setIsSubmittingOrder(false);
     }
-
-    if (saveResult.synced && saveResult.orderNumber) {
-      setOrderNumber(saveResult.orderNumber);
-    }
-
-    setActiveOrderKey(persistedOrderKey);
-    setSelectedWaitingNumber(assignedWaitingNumber ?? null);
-
-    setProducts((prev) =>
-      prev.map((prod) => {
-        const itemInCart = cart.find((c) => c.product.id === prod.id);
-        if (itemInCart) {
-          return { ...prod, stock: Math.max(0, prod.stock - itemInCart.quantity) };
-        }
-        return prod;
-      })
-    );
-
-    setStep('completed');
   };
 
   const handleResetForNext = () => {
@@ -419,6 +431,12 @@ export default function RegisterPage() {
               className="text-xs bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-medium px-2.5 sm:px-3 py-1.5 rounded-lg transition"
             >
               受け渡し画面
+            </Link>
+            <Link
+              href="/kitchen"
+              className="text-xs bg-amber-50 hover:bg-amber-100 text-amber-700 font-medium px-2.5 sm:px-3 py-1.5 rounded-lg transition border border-amber-200"
+            >
+              厨房画面
             </Link>
             <Link
               href="/admin"
@@ -647,11 +665,11 @@ export default function RegisterPage() {
 
               <button
                 id="register-confirm-button"
-                disabled={receivedAmount === null || receivedAmount < finalTotal}
+                disabled={receivedAmount === null || receivedAmount < finalTotal || isSubmittingOrder}
                 onClick={handleCompleteOrder}
                 className="w-full mt-4 py-3.5 bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-200 text-white font-bold text-sm rounded-2xl transition shadow-md"
               >
-                会計を確定する
+                {isSubmittingOrder ? '処理中...' : '会計を確定する'}
               </button>
             </div>
           )}

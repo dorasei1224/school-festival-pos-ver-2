@@ -9,7 +9,6 @@ export function useProducts() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 1. 初回の全商品データを取得
     const fetchProducts = async () => {
       const { data, error } = await supabase
         .from('products')
@@ -24,9 +23,12 @@ export function useProducts() {
       setLoading(false);
     };
 
-    fetchProducts();
+    void fetchProducts();
 
-    // 2. Supabase Realtimeで変更（UPDATE / INSERT / DELETE）を常時監視
+    const pollingId = window.setInterval(() => {
+      void fetchProducts();
+    }, 3000);
+
     const channel = supabase
       .channel('products-realtime')
       .on(
@@ -44,9 +46,14 @@ export function useProducts() {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('[Realtime fallback] products channel unavailable, using polling.');
+        }
+      });
 
     return () => {
+      window.clearInterval(pollingId);
       supabase.removeChannel(channel);
     };
   }, []);

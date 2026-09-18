@@ -260,6 +260,10 @@ export default function AdminPage() {
   useEffect(() => {
     void Promise.resolve().then(() => fetchData());
 
+    const pollingId = window.setInterval(() => {
+      void fetchData();
+    }, 3000);
+
     const channel = supabase
       .channel('admin-realtime-channel')
       .on(
@@ -288,9 +292,13 @@ export default function AdminPage() {
       )
       .subscribe((status) => {
         console.log('[Realtime] 接続ステータス:', status);
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('[Realtime fallback] admin channel unavailable, using polling.');
+        }
       });
 
     return () => {
+      window.clearInterval(pollingId);
       supabase.removeChannel(channel);
     };
   }, [fetchData]);
