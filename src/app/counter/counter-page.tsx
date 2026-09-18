@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, type PointerEvent } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { cleanupStaleWaitingCards, ensureActiveWaitingCardAssignments } from '@/lib/waiting-cards';
 import { HelpButton, TutorialModal, hasSeenTutorial, markTutorialSeen, type TutorialStep } from '@/components/TutorialModal';
 
 interface OrderItem {
@@ -16,6 +17,7 @@ interface Order {
   time: string;
   items: OrderItem[];
   status: 'preparing' | 'completed';
+  waitingNumber?: number | null;
 }
 
 interface DatabaseOrder {
@@ -89,28 +91,50 @@ export default function CounterPage() {
   }, [showTutorial, tutorialStepIndex]);
 
   const fetchOrders = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('orders')
-      .select(`id, order_number, created_at, status, order_items (id, quantity, product:products (name))`)
-      .order('created_at', { ascending: true });
+    await cleanupStaleWaitingCards();
+    await ensureActiveWaitingCardAssignments();
+
+    const [{ data: waitingData, error: waitingError }, { data, error }] = await Promise.all([
+      supabase
+        .from('waiting_cards')
+        .select('order_id, waiting_number, status')
+        .eq('status', 'assigned'),
+      supabase
+        .from('orders')
+        .select(`id, order_number, created_at, status, order_items (id, quantity, product:products (name))`)
+        .order('created_at', { ascending: true }),
+    ]);
+
+    if (waitingError) {
+      console.error('待合番号の取得に失敗しました:', waitingError.message);
+    }
 
     if (error) {
       console.error('受け渡し注文の取得に失敗しました:', error.message);
       return;
     }
 
+    const waitingNumberMap = new Map<string, number>();
+    for (const card of waitingData ?? []) {
+      if (card.order_id && card.waiting_number != null && card.status === 'assigned') {
+        waitingNumberMap.set(String(card.order_id), Number(card.waiting_number));
+      }
+    }
+
     const databaseOrders = (data as DatabaseOrder[])
       .filter((order) => ['pending', 'ready', 'completed'].includes(order.status.toLowerCase()))
       .map((order) => ({
-      id: order.id,
-      orderNumber: order.order_number,
-      time: new Date(order.created_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }),
-      items: (order.order_items || []).map((item) => ({
-        name: Array.isArray(item.product) ? item.product[0]?.name || '商品' : item.product?.name || '商品',
-        quantity: item.quantity,
-      })),
-      status: order.status.toLowerCase() === 'completed' ? 'completed' : 'preparing',
-    } satisfies Order));
+        id: order.id,
+        orderNumber: order.order_number,
+        time: new Date(order.created_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }),
+        items: (order.order_items || []).map((item) => ({
+          name: Array.isArray(item.product) ? item.product[0]?.name || '商品' : item.product?.name || '商品',
+          quantity: item.quantity,
+        })),
+        status: order.status.toLowerCase() === 'completed' ? 'completed' : 'preparing',
+        waitingNumber: waitingNumberMap.get(order.id) ?? null,
+      } satisfies Order));
+
     setOrders(databaseOrders);
   }, []);
 
@@ -120,6 +144,7 @@ export default function CounterPage() {
       .channel('counter-orders-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchOrders())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, () => fetchOrders())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'waiting_cards' }, () => fetchOrders())
       .subscribe();
 
     return () => {
@@ -163,6 +188,11 @@ export default function CounterPage() {
   const preparingOrders = currentOrders.filter((o) => o.status === 'preparing');
   const completedOrders = currentOrders.filter((o) => o.status === 'completed');
   const recentCompletedOrders = completedOrders.slice(-5).reverse();
+
+  const getOrderWaitingNumber = (orderId: string) => {
+    const match = orders.find((order) => order.id === orderId);
+    return match?.waitingNumber ?? null;
+  };
 
   return (
     <div className="min-h-screen bg-[#F3F4F6] text-neutral-800 font-sans flex flex-col antialiased">
@@ -263,7 +293,7 @@ export default function CounterPage() {
                   <div>
                     <div className="flex justify-between items-start mb-2">
                       <span className="text-2xl font-black text-neutral-900">
-                        No. {order.orderNumber}
+                        No. {order.waitingNumber ?? '—'}
                       </span>
                       <span className="text-xs text-neutral-400 font-medium">{order.time}</span>
                     </div>
@@ -300,11 +330,16 @@ export default function CounterPage() {
           ) : (() => {
             const selectedOrder = preparingOrders.find((order) => order.id === selectedOrderId);
             if (!selectedOrder) return <p className="text-xs text-neutral-400 text-center py-20">注文を選択してください</p>;
+            const waitingNumber = selectedOrder.waitingNumber ?? null;
             return (
               <div className="flex-1 flex flex-col justify-between">
                 <div>
                   <p className="text-xs text-neutral-500 font-bold">選択中の注文</p>
-                  <p className="text-5xl font-black text-neutral-900 mt-2">No. {selectedOrder.orderNumber}</p>
+                  <p className="text-xl font-bold text-neutral-500 mt-2">注文番号: No. {selectedOrder.orderNumber}</p>
+                  <div className="mt-2 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-neutral-500">待合番号</p>
+                    <p className="text-4xl font-black text-neutral-900">No. {waitingNumber ?? '—'}</p>
+                  </div>
                   <div className="mt-5 space-y-2">
                     {selectedOrder.items.map((item, index) => (
                       <div key={index} className="flex justify-between text-sm font-bold text-neutral-700">
@@ -354,7 +389,10 @@ export default function CounterPage() {
                 >
                   <div>
                     <span className="font-extrabold text-sm text-neutral-800 block">
-                      No. {order.orderNumber}
+                      待合 No. {order.waitingNumber ?? '—'}
+                    </span>
+                    <span className="text-[10px] text-neutral-400 block">
+                      注文番号: {order.orderNumber}
                     </span>
                     <span className="text-[10px] text-neutral-400">
                       {order.items.map((i) => i.name).join(', ')}

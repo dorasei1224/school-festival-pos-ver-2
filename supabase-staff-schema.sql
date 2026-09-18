@@ -40,6 +40,43 @@ create trigger orders_set_staff_id
 before insert or update of staff_name on public.orders
 for each row execute function public.set_order_staff_id();
 
+-- 待合番号の実体テーブル
+create table if not exists public.waiting_cards (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null references public.orders(id) on delete cascade,
+  waiting_number integer not null,
+  status text not null default 'assigned' check (status in ('assigned', 'released')),
+  assigned_at timestamptz not null default now(),
+  released_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique(order_id)
+);
+
+alter table public.waiting_cards enable row level security;
+
+drop policy if exists waiting_cards_select_policy on public.waiting_cards;
+drop policy if exists waiting_cards_insert_policy on public.waiting_cards;
+drop policy if exists waiting_cards_update_policy on public.waiting_cards;
+
+create policy waiting_cards_select_policy
+  on public.waiting_cards
+  for select
+  using (true);
+
+create policy waiting_cards_insert_policy
+  on public.waiting_cards
+  for insert
+  with check (true);
+
+create policy waiting_cards_update_policy
+  on public.waiting_cards
+  for update
+  using (true)
+  with check (true);
+
+create index if not exists idx_waiting_cards_order_id on public.waiting_cards(order_id);
+create index if not exists idx_waiting_cards_status on public.waiting_cards(status);
+
 -- 会計直後は受け渡し待ちにする。
 -- 既存の process_checkout が COMPLETED / completed を登録しても、
 -- 新規注文だけ受け渡し画面の「準備中」に入るよう補正する。
@@ -59,6 +96,19 @@ drop trigger if exists orders_set_new_order_pending on public.orders;
 create trigger orders_set_new_order_pending
 before insert on public.orders
 for each row execute function public.set_new_order_pending();
+
+-- 待合番号の割り当て情報は、注文 ID とは切り離されないように管理する
+-- 受け渡し完了時に「released」へ更新し、次に使える番号として再利用させる
+create or replace function public.release_waiting_card_by_order(p_order_id uuid)
+returns void
+language plpgsql
+as $$
+begin
+  update public.waiting_cards
+  set status = 'released', released_at = now()
+  where order_id = p_order_id;
+end;
+$$;
 
 -- メモ: PIN は本番では平文保持ではなくハッシュ化推奨
 -- 例: Supabase Auth へ置き換えるか、pin_hash へ変更することを推奨

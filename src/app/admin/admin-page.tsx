@@ -6,8 +6,9 @@ import { supabase } from '@/lib/supabase';
 import { getCurrentStaff, getStaffById, StaffAccount } from '@/lib/staff-auth';
 import { Product } from '@/types/database';
 import { HelpButton, TutorialModal, hasSeenTutorial, markTutorialSeen, type TutorialStep } from '@/components/TutorialModal';
+import { addWaitingCard, getWaitingCards, releaseWaitingCard, type WaitingCard } from '@/lib/waiting-cards';
 
-type AdminTab = 'dashboard' | 'history' | 'drawer' | 'inventory';
+type AdminTab = 'dashboard' | 'history' | 'drawer' | 'inventory' | 'waiting';
 
 interface OrderItemWithProduct {
   id: string;
@@ -133,6 +134,7 @@ export default function AdminPage() {
   } | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialStepIndex, setTutorialStepIndex] = useState(0);
+  const [waitingCards, setWaitingCards] = useState<WaitingCard[]>([]);
 
   const adminTutorialSteps: TutorialStep[] = [
     { id: 'admin-dashboard', title: '売上ダッシュボード', subtitle: 'まずは売上の全体感を見る', description: '管理画面の上部では売上や注文数の状態を見られます。全体把握の入口です。', targetId: 'admin-dashboard-panel', align: 'right' },
@@ -178,6 +180,17 @@ export default function AdminPage() {
   const [cancelError, setCancelError] = useState<string | null>(null);
 
   const isAdminAccess = Boolean(currentStaff && currentStaff.role === 'admin');
+
+  useEffect(() => {
+    setWaitingCards(getWaitingCards());
+
+    const handleStorageUpdate = () => {
+      setWaitingCards(getWaitingCards());
+    };
+
+    window.addEventListener('storage', handleStorageUpdate);
+    return () => window.removeEventListener('storage', handleStorageUpdate);
+  }, []);
 
   useEffect(() => {
     void (async () => {
@@ -381,6 +394,12 @@ export default function AdminPage() {
       item.id === productId ? { ...item, stock: newStock } : item
     )));
     setInventoryDrafts((drafts) => ({ ...drafts, [productId]: String(newStock) }));
+  };
+
+  const handleAddWaitingCard = () => {
+    const nextNumber = addWaitingCard();
+    setWaitingCards(getWaitingCards());
+    console.log(`待合カードを追加しました: No.${nextNumber}`);
   };
 
   const handlePrintPDF = () => {
@@ -1028,6 +1047,59 @@ export default function AdminPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'waiting' && (
+            <div className="bg-white rounded-2xl p-6 border border-neutral-200/80 shadow-sm space-y-5">
+              <div className="flex justify-between items-center gap-3 flex-wrap">
+                <div>
+                  <h2 className="font-bold text-sm text-neutral-900">待合番号カード管理</h2>
+                  <p className="text-xs text-neutral-400">初期状態は 1〜10 で、足りなくなったらカードを追加できます。</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddWaitingCard}
+                  className="bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold px-3 py-2 rounded-xl transition"
+                >
+                  待合カードを追加
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+                {waitingCards.length === 0 ? (
+                  <p className="text-xs text-neutral-400 col-span-full py-4 text-center">待合カードがありません</p>
+                ) : (
+                  waitingCards.map((card) => (
+                    <div
+                      key={card.id}
+                      className={`rounded-2xl border p-3 text-center ${
+                        card.status === 'available'
+                          ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                          : 'bg-neutral-100 border-neutral-200 text-neutral-500'
+                      }`}
+                    >
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em]">待合番号</p>
+                      <p className="mt-2 text-3xl font-black">{card.number}</p>
+                      <p className="mt-2 text-[10px] font-bold">
+                        {card.status === 'available' ? '利用可能' : '割り当て済み'}
+                      </p>
+                      {card.status === 'assigned' && card.assignedOrderKey && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            releaseWaitingCard(card.assignedOrderKey!);
+                            setWaitingCards(getWaitingCards());
+                          }}
+                          className="mt-2 text-[10px] font-bold text-rose-600 underline"
+                        >
+                          解放する
+                        </button>
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           )}

@@ -28,6 +28,7 @@ interface SaveOrderResult {
   success: boolean;
   synced: boolean;
   orderNumber?: number;
+  orderId?: string;
 }
 
 export function useOfflineSync() {
@@ -66,7 +67,7 @@ export function useOfflineSync() {
   }, []);
 
   // オンライン時はSupabaseの会計RPCへ送信する
-  const sendOrderToServer = useCallback(async (order: OrderData): Promise<{ success: boolean; orderNumber?: number }> => {
+  const sendOrderToServer = useCallback(async (order: OrderData): Promise<{ success: boolean; orderNumber?: number; orderId?: string }> => {
     try {
       const { data, error } = await supabase.rpc('process_checkout', {
         p_staff_name: order.staffName,
@@ -93,7 +94,7 @@ export function useOfflineSync() {
 
       const { data: savedOrder, error: orderError } = await supabase
         .from('orders')
-        .select('order_number')
+        .select('id, order_number')
         .eq('id', checkout.order_id)
         .single();
 
@@ -102,7 +103,7 @@ export function useOfflineSync() {
         return { success: false };
       }
 
-      return { success: true, orderNumber: savedOrder.order_number };
+      return { success: true, orderId: savedOrder.id, orderNumber: savedOrder.order_number };
     } catch (error) {
       console.error('Supabaseへの注文送信中に例外が発生しました:', error);
       return { success: false };
@@ -188,11 +189,13 @@ export function useOfflineSync() {
     if (navigator.onLine) {
       const result = await sendOrderToServer(order);
       if (result.success) {
-        const syncedOrder = result.orderNumber
-          ? { ...order, orderNumber: result.orderNumber }
-          : order;
+        const syncedOrder = {
+          ...order,
+          id: result.orderId ?? order.id,
+          orderNumber: result.orderNumber ?? order.orderNumber,
+        };
         saveCompletedLocal(syncedOrder);
-        return { success: true, synced: true, orderNumber: syncedOrder.orderNumber };
+        return { success: true, synced: true, orderNumber: syncedOrder.orderNumber, orderId: syncedOrder.id };
       }
     }
 
@@ -201,7 +204,7 @@ export function useOfflineSync() {
     const updated = [...currentQueue, order];
     localStorage.setItem(PENDING_KEY, JSON.stringify(updated));
     setPendingOrders(updated);
-    return { success: true, synced: false, orderNumber: order.orderNumber };
+    return { success: true, synced: false, orderNumber: order.orderNumber, orderId: order.id };
   }, [sendOrderToServer, saveCompletedLocal]);
 
   return {

@@ -7,6 +7,15 @@ import { useProducts } from '@/hooks/useProducts';
 import StaffLoginPage from './login-page';
 import { getCurrentStaff, getStaffById, setCurrentStaff, StaffAccount } from '@/lib/staff-auth';
 import { HelpButton, TutorialModal, hasSeenTutorial, markTutorialSeen, type TutorialStep } from '@/components/TutorialModal';
+import {
+  addWaitingCard,
+  getAvailableWaitingNumbers,
+  getWaitingCards,
+  loadWaitingCardsFromSupabase,
+  type WaitingCard,
+  releaseWaitingCard,
+  reserveWaitingCard,
+} from '@/lib/waiting-cards';
 
 interface Product {
   id: string;
@@ -45,6 +54,9 @@ export default function RegisterPage() {
   const [useCoupon, setUseCoupon] = useState<boolean>(false);
   const [receivedAmount, setReceivedAmount] = useState<number | null>(null);
   const [orderNumber, setOrderNumber] = useState<number>(0);
+  const [selectedWaitingNumber, setSelectedWaitingNumber] = useState<number | null>(null);
+  const [waitingCards, setWaitingCards] = useState<WaitingCard[]>([]);
+  const [activeOrderKey, setActiveOrderKey] = useState<string | null>(null);
 
   const [showReceiptModal, setShowReceiptModal] = useState<boolean>(false);
   const [customerName, setCustomerName] = useState<string>('上様');
@@ -59,6 +71,23 @@ export default function RegisterPage() {
   const couponDiscount = useMemo(() => (useCoupon && cart.length > 0 ? 100 : 0), [useCoupon, cart.length]);
   const finalTotal = useMemo(() => Math.max(0, subtotal - bundleDiscount - couponDiscount), [subtotal, bundleDiscount, couponDiscount]);
   const changeAmount = useMemo(() => (receivedAmount === null ? 0 : Math.max(0, receivedAmount - finalTotal)), [receivedAmount, finalTotal]);
+  const availableWaitingNumbers = useMemo(() => getAvailableWaitingNumbers(), [waitingCards]);
+
+  useEffect(() => {
+    const refreshWaitingCards = async () => {
+      const cards = await loadWaitingCardsFromSupabase();
+      setWaitingCards(cards);
+    };
+
+    void refreshWaitingCards();
+
+    const handleStorage = () => {
+      setWaitingCards(getWaitingCards());
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
 
   const registerTutorialSteps: TutorialStep[] = [
     { id: 'register-product', title: '商品を選ぶ', subtitle: '最初に商品を選びます', description: '左の一覧から商品のカードを押すと、右側の注文内容に追加されます。デモではこの動作を自動で再現します。', targetId: 'register-product-0', align: 'right' },
@@ -253,7 +282,7 @@ export default function RegisterPage() {
     setCompletedAt(nowFormatted);
 
     const newOrder: OrderData = {
-      id: `order_${Date.now()}`,
+      id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `order_${Date.now()}`,
       orderNumber,
       staffName,
       staffId: currentStaff?.id ?? 'unknown-staff',
@@ -271,10 +300,26 @@ export default function RegisterPage() {
       createdAt: nowIso,
     };
 
+    const targetWaitingNumber = selectedWaitingNumber;
+    setSelectedWaitingNumber(null);
+
     const saveResult = await saveOrder(newOrder);
+    const persistedOrderKey = saveResult.orderId ?? newOrder.id;
+    const assignedWaitingNumber = await reserveWaitingCard(persistedOrderKey, targetWaitingNumber);
+    const refreshedCards = await loadWaitingCardsFromSupabase();
+    setWaitingCards(refreshedCards);
+
+    if (assignedWaitingNumber === null && refreshedCards.filter((card) => card.status === 'available').length === 0) {
+      alert('利用可能な待合番号がありません。管理画面で待合カードを追加してください。');
+      return;
+    }
+
     if (saveResult.synced && saveResult.orderNumber) {
       setOrderNumber(saveResult.orderNumber);
     }
+
+    setActiveOrderKey(persistedOrderKey);
+    setSelectedWaitingNumber(assignedWaitingNumber ?? null);
 
     setProducts((prev) =>
       prev.map((prod) => {
@@ -290,8 +335,14 @@ export default function RegisterPage() {
   };
 
   const handleResetForNext = () => {
+    if (activeOrderKey) {
+      void releaseWaitingCard(activeOrderKey);
+      setActiveOrderKey(null);
+    }
+
     setOrderNumber((prev) => prev + 1);
     setShowReceiptModal(false);
+    setSelectedWaitingNumber(null);
     clearCart();
     setStep('cart');
   };
@@ -541,6 +592,25 @@ export default function RegisterPage() {
                   </div>
                 </div>
 
+                <div className="mb-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-3">
+                  <label className="block text-[10px] font-bold uppercase tracking-[0.18em] text-neutral-500 mb-1.5">
+                    待合番号
+                  </label>
+                  <select
+                    value={selectedWaitingNumber ?? ''}
+                    onChange={(event) => setSelectedWaitingNumber(event.target.value ? Number(event.target.value) : null)}
+                    className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-bold text-neutral-800 focus:outline-none focus:border-neutral-900"
+                  >
+                    <option value="">自動で空き番号を割り当てる</option>
+                    {Array.from(new Set([...availableWaitingNumbers, selectedWaitingNumber].filter((value): value is number => value !== null))).sort((a, b) => a - b).map((number) => (
+                      <option key={number} value={number}>No. {number}</option>
+                    ))}
+                  </select>
+                  {availableWaitingNumbers.length === 0 && (
+                    <p className="mt-2 text-[10px] text-amber-700 font-bold">利用可能な待合番号がありません。管理画面でカードを追加してください。</p>
+                  )}
+                </div>
+
                 <div className="grid grid-cols-2 gap-2 mb-3">
                   <button 
                     onClick={() => setReceivedAmount(finalTotal)} 
@@ -599,9 +669,10 @@ export default function RegisterPage() {
                 </div>
 
                 <div className="bg-neutral-900 text-white rounded-2xl p-4 text-center shadow-lg mb-3">
-                  <p className="text-[10px] text-neutral-400 font-bold">待合・呼び出し番号</p>
-                  <p className="text-4xl font-black text-amber-400 my-1 tracking-tight">No. {orderNumber}</p>
-                  <p className="text-[10px] text-neutral-400">お釣り: <span className="text-white font-bold">{changeAmount.toLocaleString()}円</span></p>
+                  <p className="text-[10px] text-neutral-400 font-bold">待合番号</p>
+                  <p className="text-4xl font-black text-amber-400 my-1 tracking-tight">No. {selectedWaitingNumber ?? '—'}</p>
+                  <p className="text-[10px] text-neutral-400 mt-1">注文番号: <span className="text-white font-bold">No. {orderNumber}</span></p>
+                  <p className="text-[10px] text-neutral-400 mt-1">お釣り: <span className="text-white font-bold">{changeAmount.toLocaleString()}円</span></p>
                 </div>
 
                 <div className="bg-neutral-50 rounded-2xl p-3 border border-neutral-200/80 mb-3 text-center">
