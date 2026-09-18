@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, type PointerEvent } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { HelpButton, TutorialModal, hasSeenTutorial, markTutorialSeen, type TutorialStep } from '@/components/TutorialModal';
 
 interface OrderItem {
   name: string;
@@ -35,6 +36,57 @@ export default function CounterPage() {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [swipeStartX, setSwipeStartX] = useState<number | null>(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialStepIndex, setTutorialStepIndex] = useState(0);
+
+  const demoTutorialOrders: Order[] = [
+    {
+      id: 'demo-order-0',
+      orderNumber: 0,
+      time: '12:30',
+      items: [
+        { name: 'チョコ', quantity: 2 },
+        { name: 'ソーダ味', quantity: 1 },
+      ],
+      status: 'preparing',
+    },
+  ];
+
+  const counterTutorialSteps: TutorialStep[] = [
+    { id: 'counter-list', title: '注文一覧を確認', subtitle: '準備中の注文が並んでいます', description: '左側の一覧では、まだ受け渡しが完了していない注文が表示されます。ここを確認して次の作業に進めます。', targetId: 'counter-order-list', align: 'right' },
+    { id: 'counter-select', title: '注文番号を選ぶ', subtitle: '該当の番号を押して受け渡し画面へ進みます', description: '注文番号をタップすると、右側の受け渡し操作パネルが開きます。この操作が受け渡しの中心です。', targetId: 'counter-select-target', align: 'left' },
+    { id: 'counter-complete', title: '受け渡し完了', subtitle: '完了操作で状態を切り替えます', description: '完了ボタンを押すと、受け渡し状態が完了へ切り替わります。デモでは表示だけにして、保存は行わない構成です。', targetId: 'counter-complete-button', align: 'left' },
+  ];
+
+  useEffect(() => {
+    if (!hasSeenTutorial()) {
+      markTutorialSeen();
+      setShowTutorial(true);
+      setTutorialStepIndex(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!showTutorial) return;
+
+    if (tutorialStepIndex === 0) {
+      setActiveView('board');
+      setSelectedOrderId(null);
+      setSwipeOffset(0);
+      return;
+    }
+
+    if (tutorialStepIndex === 1) {
+      setSelectedOrderId('demo-order-0');
+      setSwipeOffset(0);
+      return;
+    }
+
+    if (tutorialStepIndex === 2) {
+      setSelectedOrderId('demo-order-0');
+      setSwipeOffset(140);
+    }
+  }, [showTutorial, tutorialStepIndex]);
 
   const fetchOrders = useCallback(async () => {
     const { data, error } = await supabase
@@ -106,8 +158,10 @@ export default function CounterPage() {
     setSwipeStartX(null);
   };
 
-  const preparingOrders = orders.filter((o) => o.status === 'preparing');
-  const completedOrders = orders.filter((o) => o.status === 'completed');
+  const tutorialOrders = showTutorial ? [demoTutorialOrders[0]] : orders;
+  const currentOrders = tutorialOrders;
+  const preparingOrders = currentOrders.filter((o) => o.status === 'preparing');
+  const completedOrders = currentOrders.filter((o) => o.status === 'completed');
   const recentCompletedOrders = completedOrders.slice(-5).reverse();
 
   return (
@@ -136,6 +190,7 @@ export default function CounterPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <HelpButton onClick={() => setShowTutorial(true)} />
             <Link
               href="/"
               className="text-xs bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-medium px-2.5 sm:px-3 py-1.5 rounded-lg transition"
@@ -151,6 +206,8 @@ export default function CounterPage() {
           </div>
         </div>
       </header>
+
+      <TutorialModal open={showTutorial} onClose={() => setShowTutorial(false)} steps={counterTutorialSteps} stepIndex={tutorialStepIndex} onStepChange={setTutorialStepIndex} />
 
       <nav className="bg-white border-b border-neutral-200/80" aria-label="受け渡し画面の表示切替">
         <div className="max-w-[1400px] mx-auto px-3 sm:px-6 flex gap-1 overflow-x-auto">
@@ -181,7 +238,7 @@ export default function CounterPage() {
       {activeView === 'board' ? (
       <main className="max-w-[1400px] mx-auto px-3 sm:px-6 py-4 sm:py-6 flex-1 w-full grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 items-start">
         {/* ① 準備中・調理中カラム */}
-        <section className="lg:col-span-5 bg-white rounded-3xl p-4 sm:p-5 border border-neutral-200/80 shadow-sm min-h-[420px] lg:min-h-[600px] flex flex-col">
+        <section id="counter-order-list" className="lg:col-span-5 bg-white rounded-3xl p-4 sm:p-5 border border-neutral-200/80 shadow-sm min-h-[420px] lg:min-h-[600px] flex flex-col">
           <div className="flex justify-between items-center pb-4 mb-4 border-b border-neutral-100">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
@@ -196,8 +253,9 @@ export default function CounterPage() {
             {preparingOrders.length === 0 ? (
               <p className="text-xs text-neutral-400 text-center py-20">現在準備中の注文はありません</p>
             ) : (
-              preparingOrders.map((order) => (
+              preparingOrders.map((order, index) => (
                 <div
+                  id={index === 0 ? 'counter-select-target' : undefined}
                   key={order.id}
                   onClick={() => setSelectedOrderId(order.id)}
                   className="bg-neutral-50 rounded-2xl p-4 border border-neutral-200/80 shadow-sm flex flex-col justify-between"
@@ -258,6 +316,7 @@ export default function CounterPage() {
                 <div className="mt-8">
                   <p className="text-center text-xs text-neutral-500 mb-2">右へスワイプして受け渡し完了</p>
                   <div
+                    id="counter-complete-button"
                     className="relative h-14 rounded-full bg-neutral-100 border border-neutral-200 overflow-hidden touch-pan-y select-none"
                     onPointerDown={handleSwipeStart}
                     onPointerMove={handleSwipeMove}

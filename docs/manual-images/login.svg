@@ -1,0 +1,17 @@
+<svg width="1200" height="700" viewBox="0 0 1200 700" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="700" fill="#F3F4F6"/>
+  <rect x="350" y="90" width="500" height="520" rx="32" fill="white" stroke="#E5E7EB"/>
+  <text x="600" y="155" text-anchor="middle" fill="#6B7280" font-size="18" font-family="Arial" letter-spacing="4">Festival POS</text>
+  <text x="600" y="210" text-anchor="middle" fill="#111827" font-size="38" font-weight="700" font-family="Arial">スタッフログイン</text>
+  <rect x="430" y="245" width="340" height="54" rx="12" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="455" y="278" fill="#6B7280" font-size="18" font-family="Arial">スタッフ名</text>
+  <rect x="430" y="325" width="340" height="54" rx="12" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="455" y="358" fill="#6B7280" font-size="18" font-family="Arial">PIN</text>
+  <rect x="430" y="420" width="340" height="58" rx="14" fill="#111827"/>
+  <text x="600" y="456" text-anchor="middle" fill="white" font-size="20" font-family="Arial" font-weight="700">ログインしてPOSを開始</text>
+  <rect x="430" y="500" width="150" height="44" rx="10" fill="#E5E7EB"/>
+  <text x="505" y="528" text-anchor="middle" fill="#374151" font-size="16" font-family="Arial" font-weight="700">ログイン</text>
+  <rect x="620" y="500" width="150" height="44" rx="10" fill="#F3F4F6"/>
+  <text x="695" y="528" text-anchor="middle" fill="#374151" font-size="16" font-family="Arial" font-weight="700">新規作成</text>
+  <text x="600" y="610" text-anchor="middle" fill="#6B7280" font-size="16" font-family="Arial">1. 名前を選択  2. PINを入力  3. 開始</text>
+</svg>

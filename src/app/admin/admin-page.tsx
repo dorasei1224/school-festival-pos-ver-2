@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { getCurrentStaff, getStaffById, StaffAccount } from '@/lib/staff-auth';
 import { Product } from '@/types/database';
+import { HelpButton, TutorialModal, hasSeenTutorial, markTutorialSeen, type TutorialStep } from '@/components/TutorialModal';
 
-type AdminTab = 'dashboard' | 'orders' | 'history' | 'drawer' | 'inventory';
+type AdminTab = 'dashboard' | 'history' | 'drawer' | 'inventory';
 
 interface OrderItemWithProduct {
   id: string;
@@ -130,6 +131,42 @@ export default function AdminPage() {
     x: number;
     y: number;
   } | null>(null);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialStepIndex, setTutorialStepIndex] = useState(0);
+
+  const adminTutorialSteps: TutorialStep[] = [
+    { id: 'admin-dashboard', title: '売上ダッシュボード', subtitle: 'まずは売上の全体感を見る', description: '管理画面の上部では売上や注文数の状態を見られます。全体把握の入口です。', targetId: 'admin-dashboard-panel', align: 'right' },
+    { id: 'admin-inventory', title: '在庫を確認', subtitle: '商品の残数を見て補充の判断をします', description: '在庫の残り具合を見て、補充や見直しの判断をします。ここは管理業務の基礎です。', targetId: 'admin-inventory-tab', align: 'left' },
+    { id: 'admin-history', title: '注文履歴を確認', subtitle: '売上の詳細もここで見ます', description: '履歴を見れば、どの時間帯にどの商品が売れたかを確認できます。問題発生時の確認にも使えます。', targetId: 'admin-history-tab', align: 'left' },
+    { id: 'admin-drawer', title: 'レジ締め・ドロアー点検', subtitle: '最終確認と現金確認をします', description: 'レジ締めやドロアー点検では、現金の残高や計数を確認して、翌営業に備えます。', targetId: 'admin-drawer-tab', align: 'left' },
+  ];
+
+  useEffect(() => {
+    if (!hasSeenTutorial()) {
+      markTutorialSeen();
+      setShowTutorial(true);
+      setTutorialStepIndex(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!showTutorial) return;
+    if (tutorialStepIndex === 0) {
+      setActiveTab('dashboard');
+      return;
+    }
+    if (tutorialStepIndex === 1) {
+      setActiveTab('inventory');
+      return;
+    }
+    if (tutorialStepIndex === 2) {
+      setActiveTab('history');
+      return;
+    }
+    if (tutorialStepIndex === 3) {
+      setActiveTab('drawer');
+    }
+  }, [showTutorial, tutorialStepIndex]);
 
   // ドロアー点検用ステート
   const [initialCash, setInitialCash] = useState<number>(10000);
@@ -137,6 +174,8 @@ export default function AdminPage() {
     10000: 0, 5000: 0, 2000: 0, 1000: 0, 500: 0, 100: 0, 50: 0, 10: 0, 5: 0, 1: 0,
   });
   const [inventoryDrafts, setInventoryDrafts] = useState<Record<string, string>>({});
+  const [cancelTarget, setCancelTarget] = useState<OrderDetail | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   const isAdminAccess = Boolean(currentStaff && currentStaff.role === 'admin');
 
@@ -261,27 +300,26 @@ export default function AdminPage() {
     }
   };
 
-  // 注文キャンセル処理（在庫の自動返却含む）
-  const handleCancelOrder = async (order: OrderDetail) => {
+  // 注文キャンセル処理
+  const finalizeCancelOrder = async (order: OrderDetail, mode: 'restore' | 'discard') => {
     if (order.status === 'cancelled') return;
-    if (!confirm(`注文番号 #${order.order_number} をキャンセルしますか？\n（在庫は自動的に戻されます）`)) return;
 
     try {
-      // 1. 各商品の在庫を復元
-      for (const item of order.order_items) {
-        const product = products.find((p) => p.id === item.product_id);
-        if (product) {
-          const restoredStock = product.stock + item.quantity;
-          const { error: stockErr } = await supabase
-            .from('products')
-            .update({ stock: restoredStock })
-            .eq('id', item.product_id);
+      if (mode === 'restore') {
+        for (const item of order.order_items) {
+          const product = products.find((p) => p.id === item.product_id);
+          if (product) {
+            const restoredStock = product.stock + item.quantity;
+            const { error: stockErr } = await supabase
+              .from('products')
+              .update({ stock: restoredStock })
+              .eq('id', item.product_id);
 
-          if (stockErr) throw stockErr;
+            if (stockErr) throw stockErr;
+          }
         }
       }
 
-      // 2. 注文ステータスを cancelled に更新
       const { error: orderErr } = await supabase
         .from('orders')
         .update({ status: 'cancelled' })
@@ -289,13 +327,20 @@ export default function AdminPage() {
 
       if (orderErr) throw orderErr;
 
-      alert(`注文 #${order.order_number} をキャンセルしました。`);
+      setCancelTarget(null);
+      setCancelError(null);
       await fetchData();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : '不明なエラー';
-      alert(`キャンセル処理に失敗しました: ${message}`);
+      setCancelError(`キャンセル処理に失敗しました: ${message}`);
       console.error(err);
     }
+  };
+
+  const handleCancelOrder = (order: OrderDetail) => {
+    if (order.status === 'cancelled') return;
+    setCancelTarget(order);
+    setCancelError(null);
   };
 
   // 在庫数の手動更新
@@ -485,6 +530,8 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-[#F4F4F5] text-neutral-800 antialiased font-sans pb-16">
+      <TutorialModal open={showTutorial} onClose={() => setShowTutorial(false)} steps={adminTutorialSteps} stepIndex={tutorialStepIndex} onStepChange={setTutorialStepIndex} />
+
       <div className="print:hidden">
         {/* ヘッダー */}
         <header className="bg-white border-b border-neutral-200/80 sticky top-0 z-10 shadow-sm">
@@ -504,6 +551,7 @@ export default function AdminPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              <HelpButton onClick={() => setShowTutorial(true)} />
               <button
                 onClick={handlePrintPDF}
                 className="bg-neutral-900 hover:bg-neutral-800 text-white font-bold text-xs px-2.5 sm:px-3.5 py-1.5 rounded-lg transition"
@@ -528,13 +576,13 @@ export default function AdminPage() {
           <div className="max-w-7xl mx-auto px-3 sm:px-6 flex gap-1 border-t border-neutral-100 pt-1 overflow-x-auto">
             {[
               { id: 'dashboard', label: '売上・時間帯分析' },
-              { id: 'orders', label: '調理・呼び出し管理' },
               { id: 'history', label: '注文履歴・キャンセル' },
               { id: 'drawer', label: 'レジ締め・ドロアー点検' },
               { id: 'inventory', label: '商品・在庫管理' },
             ].map((tab) => (
               <button
                 key={tab.id}
+                id={tab.id === 'drawer' ? 'admin-drawer-tab' : undefined}
                 onClick={() => setActiveTab(tab.id as AdminTab)}
                 className={`px-4 py-2.5 font-bold text-xs border-b-2 transition-all whitespace-nowrap ${
                   activeTab === tab.id
@@ -739,52 +787,6 @@ export default function AdminPage() {
           )}
 
           {/* 各タブのコンテンツ */}
-          {activeTab === 'orders' && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between bg-neutral-200/60 p-3 rounded-xl border border-neutral-300/50">
-                  <h2 className="font-bold text-xs text-neutral-700 uppercase tracking-wider">調理中 / 準備中</h2>
-                  <span className="bg-neutral-800 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                    {orders.filter((o) => o.status === 'pending').length} 件
-                  </span>
-                </div>
-                <div className="space-y-3">
-                  {orders.filter((o) => o.status === 'pending').map((order) => (
-                    <OrderCard key={order.id} order={order} onStatusChange={updateOrderStatus} />
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex items-center justify-between bg-emerald-50 p-3 rounded-xl border border-emerald-200/60">
-                  <h2 className="font-bold text-xs text-emerald-800 uppercase tracking-wider">呼び出し中（お渡し可能）</h2>
-                  <span className="bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                    {orders.filter((o) => o.status === 'ready').length} 件
-                  </span>
-                </div>
-                <div className="space-y-3">
-                  {orders.filter((o) => o.status === 'ready').map((order) => (
-                    <OrderCard key={order.id} order={order} onStatusChange={updateOrderStatus} />
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex items-center justify-between bg-neutral-100 p-3 rounded-xl border border-neutral-200">
-                  <h2 className="font-bold text-xs text-neutral-500 uppercase tracking-wider">受け渡し完了</h2>
-                  <span className="bg-neutral-400 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                    {orders.filter((o) => o.status === 'completed').length} 件
-                  </span>
-                </div>
-                <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
-                  {orders.filter((o) => o.status === 'completed').map((order) => (
-                    <OrderCard key={order.id} order={order} onStatusChange={updateOrderStatus} />
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
           {activeTab === 'history' && (
             <div className="bg-white rounded-2xl p-4 sm:p-6 border border-neutral-200/80 shadow-sm space-y-4">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -849,6 +851,51 @@ export default function AdminPage() {
                     })}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+
+          {cancelTarget && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/40 p-4">
+              <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl border border-neutral-200">
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-neutral-400">キャンセル処理</p>
+                <h3 className="mt-2 text-xl font-black text-neutral-900">注文 #{cancelTarget.order_number}</h3>
+                <p className="mt-2 text-sm text-neutral-600">
+                  この注文をどう処理しますか？
+                </p>
+
+                {cancelError && (
+                  <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                    {cancelError}
+                  </div>
+                )}
+
+                <div className="mt-4 grid gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void finalizeCancelOrder(cancelTarget, 'restore')}
+                    className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm px-4 py-3 transition"
+                  >
+                    在庫を戻してキャンセル
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void finalizeCancelOrder(cancelTarget, 'discard')}
+                    className="w-full rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm px-4 py-3 transition"
+                  >
+                    廃棄としてキャンセル
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCancelTarget(null);
+                      setCancelError(null);
+                    }}
+                    className="w-full rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-bold text-sm px-4 py-3 transition"
+                  >
+                    キャンセルしない
+                  </button>
+                </div>
               </div>
             </div>
           )}

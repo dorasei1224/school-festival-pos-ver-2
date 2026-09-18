@@ -1,0 +1,38 @@
+<svg width="1400" height="820" viewBox="0 0 1400 820" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1400" height="820" fill="#F3F4F6"/>
+  <rect x="0" y="0" width="1400" height="86" fill="white" stroke="#E5E7EB"/>
+  <text x="70" y="55" fill="#111827" font-size="30" font-family="Arial" font-weight="700">つぐポス</text>
+  <text x="220" y="55" fill="#9CA3AF" font-size="12" font-family="Arial" letter-spacing="4">ADMIN</text>
+
+  <rect x="70" y="120" width="1260" height="640" rx="26" fill="white" stroke="#E5E7EB"/>
+  <rect x="110" y="160" width="210" height="52" rx="12" fill="#111827"/>
+  <text x="215" y="195" text-anchor="middle" fill="white" font-size="18" font-family="Arial" font-weight="700">ダッシュボード</text>
+  <rect x="340" y="160" width="180" height="52" rx="12" fill="#F3F4F6"/>
+  <text x="430" y="195" text-anchor="middle" fill="#374151" font-size="18" font-family="Arial" font-weight="700">注文履歴</text>
+  <rect x="540" y="160" width="160" height="52" rx="12" fill="#F3F4F6"/>
+  <text x="620" y="195" text-anchor="middle" fill="#374151" font-size="18" font-family="Arial" font-weight="700">ドロアー</text>
+  <rect x="720" y="160" width="180" height="52" rx="12" fill="#F3F4F6"/>
+  <text x="810" y="195" text-anchor="middle" fill="#374151" font-size="18" font-family="Arial" font-weight="700">在庫管理</text>
+
+  <rect x="110" y="240" width="350" height="180" rx="20" fill="#F9FAFB" stroke="#E5E7EB"/>
+  <text x="140" y="282" fill="#6B7280" font-size="18" font-family="Arial">売上</text>
+  <text x="140" y="335" fill="#111827" font-size="42" font-family="Arial" font-weight="700">¥28,500</text>
+  <text x="140" y="372" fill="#10B981" font-size="18" font-family="Arial">前日比 +12%</text>
+
+  <rect x="490" y="240" width="350" height="180" rx="20" fill="#F9FAFB" stroke="#E5E7EB"/>
+  <text x="520" y="282" fill="#6B7280" font-size="18" font-family="Arial">注文数</text>
+  <text x="520" y="335" fill="#111827" font-size="42" font-family="Arial" font-weight="700">109件</text>
+  <text x="520" y="372" fill="#F59E0B" font-size="18" font-family="Arial">当日実績</text>
+
+  <rect x="870" y="240" width="350" height="180" rx="20" fill="#F9FAFB" stroke="#E5E7EB"/>
+  <text x="900" y="282" fill="#6B7280" font-size="18" font-family="Arial">在庫アラート</text>
+  <text x="900" y="335" fill="#111827" font-size="42" font-family="Arial" font-weight="700">3件</text>
+  <text x="900" y="372" fill="#DC2626" font-size="18" font-family="Arial">要確認</text>
+
+  <rect x="110" y="455" width="1110" height="220" rx="20" fill="#F9FAFB" stroke="#E5E7EB"/>
+  <text x="140" y="492" fill="#111827" font-size="22" font-family="Arial" font-weight="700">最新の注文</text>
+  <text x="140" y="535" fill="#374151" font-size="18" font-family="Arial">#12 キャラメル ×2 / ソーダ味 ×1</text>
+  <text x="140" y="570" fill="#374151" font-size="18" font-family="Arial">#13 チョコ ×1</text>
+  <text x="140" y="605" fill="#374151" font-size="18" font-family="Arial">#14 プレーン ×3</text>
+  <text x="1000" y="605" fill="#374151" font-size="18" font-family="Arial">状態: 呼び出し中</text>
+</svg>

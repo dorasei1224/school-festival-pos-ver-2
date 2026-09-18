@@ -6,6 +6,7 @@ import { useOfflineSync, OrderData } from '@/hooks/useOfflineSync';
 import { useProducts } from '@/hooks/useProducts';
 import StaffLoginPage from './login-page';
 import { getCurrentStaff, getStaffById, setCurrentStaff, StaffAccount } from '@/lib/staff-auth';
+import { HelpButton, TutorialModal, hasSeenTutorial, markTutorialSeen, type TutorialStep } from '@/components/TutorialModal';
 
 interface Product {
   id: string;
@@ -43,12 +44,78 @@ export default function RegisterPage() {
   
   const [useCoupon, setUseCoupon] = useState<boolean>(false);
   const [receivedAmount, setReceivedAmount] = useState<number | null>(null);
-  const [orderNumber, setOrderNumber] = useState<number>(8);
+  const [orderNumber, setOrderNumber] = useState<number>(0);
 
   const [showReceiptModal, setShowReceiptModal] = useState<boolean>(false);
   const [customerName, setCustomerName] = useState<string>('上様');
   const [proviso, setProviso] = useState<string>('お品代として');
   const [completedAt, setCompletedAt] = useState<string>('');
+  const [showTutorial, setShowTutorial] = useState<boolean>(false);
+  const [tutorialStepIndex, setTutorialStepIndex] = useState<number>(0);
+
+  const totalItemCount = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
+  const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0), [cart]);
+  const bundleDiscount = useMemo(() => (totalItemCount >= 2 ? (totalItemCount - 1) * 100 : 0), [totalItemCount]);
+  const couponDiscount = useMemo(() => (useCoupon && cart.length > 0 ? 100 : 0), [useCoupon, cart.length]);
+  const finalTotal = useMemo(() => Math.max(0, subtotal - bundleDiscount - couponDiscount), [subtotal, bundleDiscount, couponDiscount]);
+  const changeAmount = useMemo(() => (receivedAmount === null ? 0 : Math.max(0, receivedAmount - finalTotal)), [receivedAmount, finalTotal]);
+
+  const registerTutorialSteps: TutorialStep[] = [
+    { id: 'register-product', title: '商品を選ぶ', subtitle: '最初に商品を選びます', description: '左の一覧から商品のカードを押すと、右側の注文内容に追加されます。デモではこの動作を自動で再現します。', targetId: 'register-product-0', align: 'right' },
+    { id: 'register-cart', title: 'お会計へ進む', subtitle: '商品が揃ったら会計へ進みます', description: '右側の注文内容の下にある「お会計へ進む」を押すと、会計画面に切り替わります。', targetId: 'register-checkout-button', align: 'left' },
+    { id: 'register-payment', title: '金額を確認する', subtitle: 'お預かり額を入れて確定します', description: '会計画面で金額を確認してから「会計を確定する」を押します。ここではデモ画面として動作させます。', targetId: 'register-confirm-button', align: 'left' },
+    { id: 'register-complete', title: '完了の流れ', subtitle: '受付番号とレシートが出ます', description: '会計完了後に受付番号とQRレシートが表示されます。ここでは保存や送信を行わず、動作の説明だけにします。', targetId: 'register-order-complete', align: 'right' },
+  ];
+
+  useEffect(() => {
+    if (!hasSeenTutorial()) {
+      markTutorialSeen();
+      setShowTutorial(true);
+      setTutorialStepIndex(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!showTutorial || tutorialStepIndex === 0) return;
+    const target = document.getElementById(registerTutorialSteps[tutorialStepIndex]?.targetId ?? '');
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [showTutorial, tutorialStepIndex]);
+
+  useEffect(() => {
+    if (!showTutorial) return;
+
+    const product = products[0];
+    if (!product) return;
+
+    if (tutorialStepIndex === 0) {
+      setSelectedCategory('すべて');
+      setCart((prev) => {
+        if (prev.some((item) => item.product.id === product.id)) return prev;
+        return [{ product, quantity: 1 }];
+      });
+      setStep('cart');
+      return;
+    }
+
+    if (tutorialStepIndex === 1) {
+      setStep('cart');
+      return;
+    }
+
+    if (tutorialStepIndex === 2) {
+      setStep('payment');
+      setReceivedAmount(finalTotal);
+      return;
+    }
+
+    if (tutorialStepIndex === 3) {
+      setCompletedAt(new Date().toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }));
+      setStep('completed');
+      setOrderNumber(0);
+    }
+  }, [showTutorial, tutorialStepIndex, products, finalTotal]);
 
   useEffect(() => {
     void (async () => {
@@ -91,13 +158,6 @@ export default function RegisterPage() {
     if (selectedCategory === 'ドリンク') return products.filter((p) => p.category.toLowerCase() === 'drink');
     return products;
   }, [products, selectedCategory]);
-
-  const totalItemCount = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
-  const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0), [cart]);
-  const bundleDiscount = useMemo(() => (totalItemCount >= 2 ? (totalItemCount - 1) * 100 : 0), [totalItemCount]);
-  const couponDiscount = useMemo(() => (useCoupon && cart.length > 0 ? 100 : 0), [useCoupon, cart.length]);
-  const finalTotal = useMemo(() => Math.max(0, subtotal - bundleDiscount - couponDiscount), [subtotal, bundleDiscount, couponDiscount]);
-  const changeAmount = useMemo(() => (receivedAmount === null ? 0 : Math.max(0, receivedAmount - finalTotal)), [receivedAmount, finalTotal]);
 
   // ★軽量化された超シンプルな電子レシートQRコードURLの生成
   const qrCodeUrl = useMemo(() => {
@@ -302,6 +362,7 @@ export default function RegisterPage() {
                 ログアウト
               </button>
             </div>
+            <HelpButton onClick={() => setShowTutorial(true)} />
             <Link
               href="/counter"
               className="text-xs bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-medium px-2.5 sm:px-3 py-1.5 rounded-lg transition"
@@ -317,6 +378,8 @@ export default function RegisterPage() {
           </div>
         </div>
       </header>
+
+      <TutorialModal open={showTutorial} onClose={() => setShowTutorial(false)} steps={registerTutorialSteps} stepIndex={tutorialStepIndex} onStepChange={setTutorialStepIndex} />
 
       <main className="max-w-[1400px] mx-auto px-3 sm:px-6 py-4 sm:py-6 flex-1 w-full grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-8 items-start print:hidden">
         <div className="lg:col-span-7 flex flex-col gap-6">
@@ -344,6 +407,7 @@ export default function RegisterPage() {
 
               return (
                 <button
+                  id={product.id === products[0]?.id ? 'register-product-0' : undefined}
                   key={product.id}
                   disabled={isOutOfStock}
                   onClick={() => addToCart(product)}
@@ -443,6 +507,7 @@ export default function RegisterPage() {
                 </div>
 
                 <button
+                  id="register-checkout-button"
                   disabled={cart.length === 0}
                   onClick={() => setStep('payment')}
                   className="w-full mt-4 py-4 bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-200 text-white font-bold text-sm rounded-2xl transition shadow-md"
@@ -511,6 +576,7 @@ export default function RegisterPage() {
               </div>
 
               <button
+                id="register-confirm-button"
                 disabled={receivedAmount === null || receivedAmount < finalTotal}
                 onClick={handleCompleteOrder}
                 className="w-full mt-4 py-3.5 bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-200 text-white font-bold text-sm rounded-2xl transition shadow-md"
@@ -557,6 +623,7 @@ export default function RegisterPage() {
               </div>
 
               <button
+                id="register-order-complete"
                 onClick={handleResetForNext}
                 className="w-full py-3.5 bg-neutral-900 hover:bg-neutral-800 text-white font-bold text-xs rounded-2xl transition shadow-md"
               >
