@@ -49,10 +49,31 @@ export function TutorialModal({
       }
 
       const rect = target.getBoundingClientRect();
-      const align = steps[stepIndex]?.align ?? 'right';
-      const top = Math.min(window.innerHeight - 150, Math.max(20, rect.top + rect.height / 2 - 70));
-      const left = align === 'right' ? Math.max(16, rect.right + 18) : Math.min(window.innerWidth - 300, rect.left - 280);
-      setPosition({ top, left: Math.max(12, Math.min(window.innerWidth - 290, left)) });
+      const popupWidth = 280;
+      const popupHeight = 220;
+      const margin = 16;
+      let align = steps[stepIndex]?.align ?? 'right';
+
+      let left = align === 'right' ? rect.right + 18 : rect.left - popupWidth - 18;
+      if (left + popupWidth > window.innerWidth - margin) {
+        left = rect.left - popupWidth - 18;
+        align = 'left';
+      }
+      if (left < margin) {
+        left = rect.right + 18;
+        align = 'right';
+      }
+
+      let top = rect.top + rect.height / 2 - 70;
+      if (top + popupHeight > window.innerHeight - margin) {
+        top = window.innerHeight - popupHeight - margin;
+      }
+      if (top < margin) {
+        top = margin;
+      }
+
+      left = Math.min(Math.max(left, margin), window.innerWidth - popupWidth - margin);
+      setPosition({ top, left });
     };
 
     updatePosition();
@@ -84,7 +105,7 @@ export function TutorialModal({
       <div className="absolute inset-0 bg-transparent" />
 
       <div
-        className="pointer-events-auto absolute w-[270px] rounded-2xl border border-neutral-200 bg-white/95 p-3 shadow-2xl backdrop-blur-sm"
+        className="pointer-events-auto absolute w-[270px] max-w-[calc(100vw-32px)] rounded-2xl border border-neutral-200 bg-white/95 p-3 shadow-2xl backdrop-blur-sm"
         style={{ top: position.top, left: position.left }}
       >
         <div className="mb-2 flex items-center justify-between gap-2">
