@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, type PointerEvent } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { cleanupStaleWaitingCards, ensureActiveWaitingCardAssignments } from '@/lib/waiting-cards';
@@ -36,8 +36,6 @@ export default function CounterPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [activeView, setActiveView] = useState<'board' | 'history'>('board');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-  const [swipeStartX, setSwipeStartX] = useState<number | null>(null);
-  const [swipeOffset, setSwipeOffset] = useState(0);
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialStepIndex, setTutorialStepIndex] = useState(0);
 
@@ -74,19 +72,16 @@ export default function CounterPage() {
     if (tutorialStepIndex === 0) {
       setActiveView('board');
       setSelectedOrderId(null);
-      setSwipeOffset(0);
       return;
     }
 
     if (tutorialStepIndex === 1) {
       setSelectedOrderId('demo-order-0');
-      setSwipeOffset(0);
       return;
     }
 
     if (tutorialStepIndex === 2) {
       setSelectedOrderId('demo-order-0');
-      setSwipeOffset(140);
     }
   }, [showTutorial, tutorialStepIndex]);
 
@@ -171,26 +166,6 @@ export default function CounterPage() {
       return;
     }
     await fetchOrders();
-  };
-
-  const handleSwipeStart = (event: PointerEvent<HTMLDivElement>) => {
-    setSwipeStartX(event.clientX);
-    setSwipeOffset(0);
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-
-  const handleSwipeMove = (event: PointerEvent<HTMLDivElement>) => {
-    if (swipeStartX === null) return;
-    setSwipeOffset(Math.max(0, Math.min(event.clientX - swipeStartX, 260)));
-  };
-
-  const handleSwipeEnd = (orderId: string) => {
-    if (swipeOffset >= 160) {
-      void updateStatus(orderId, 'completed');
-    } else {
-      setSwipeOffset(0);
-    }
-    setSwipeStartX(null);
   };
 
   const tutorialOrders = showTutorial ? [demoTutorialOrders[0]] : orders;
@@ -364,23 +339,16 @@ export default function CounterPage() {
                     ))}
                   </div>
                 </div>
-                <div className="mt-8">
-                  <p className="text-center text-xs text-neutral-500 mb-2">右へスワイプして受け渡し完了</p>
-                  <div
+                <div className="mt-8 space-y-3">
+                  <button
                     id="counter-complete-button"
-                    className="relative h-14 rounded-full bg-neutral-100 border border-neutral-200 overflow-hidden touch-pan-y select-none"
-                    onPointerDown={handleSwipeStart}
-                    onPointerMove={handleSwipeMove}
-                    onPointerUp={() => handleSwipeEnd(selectedOrder.id)}
-                    onPointerCancel={() => handleSwipeEnd(selectedOrder.id)}
+                    type="button"
+                    onClick={() => void updateStatus(selectedOrder.id, 'completed')}
+                    className="w-full py-3.5 bg-neutral-900 hover:bg-neutral-800 text-white font-bold text-sm rounded-2xl transition shadow-md"
                   >
-                    <div className="absolute inset-0 flex items-center justify-center text-xs font-bold text-neutral-400">完了する</div>
-                    <div
-                      className="absolute top-1 left-1 h-12 w-12 rounded-full bg-neutral-900 text-white flex items-center justify-center font-bold transition-transform"
-                      style={{ transform: `translateX(${swipeOffset}px)` }}
-                    >→</div>
-                  </div>
-                  <button type="button" onClick={() => setSelectedOrderId(null)} className="w-full mt-3 text-xs text-neutral-500 hover:text-neutral-900 underline">選択を解除</button>
+                    受け渡しを完了する
+                  </button>
+                  <button type="button" onClick={() => setSelectedOrderId(null)} className="w-full text-xs text-neutral-500 hover:text-neutral-900 underline">選択を解除</button>
                 </div>
               </div>
             );
