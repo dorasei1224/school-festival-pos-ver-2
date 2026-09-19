@@ -13,7 +13,6 @@ import {
   getWaitingCards,
   loadWaitingCardsFromSupabase,
   type WaitingCard,
-  releaseWaitingCard,
   reserveWaitingCard,
 } from '@/lib/waiting-cards';
 
@@ -306,7 +305,6 @@ export default function RegisterPage() {
       };
 
       const targetWaitingNumber = selectedWaitingNumber;
-      setSelectedWaitingNumber(null);
 
       const saveResult = await saveOrder(newOrder);
       if (saveResult.duplicate || !saveResult.success) {
@@ -328,7 +326,7 @@ export default function RegisterPage() {
       }
 
       setActiveOrderKey(persistedOrderKey);
-      setSelectedWaitingNumber(assignedWaitingNumber ?? null);
+      setSelectedWaitingNumber(assignedWaitingNumber ?? targetWaitingNumber ?? null);
 
       setProducts((prev) =>
         prev.map((prod) => {
@@ -347,11 +345,7 @@ export default function RegisterPage() {
   };
 
   const handleResetForNext = () => {
-    if (activeOrderKey) {
-      void releaseWaitingCard(activeOrderKey);
-      setActiveOrderKey(null);
-    }
-
+    setActiveOrderKey(null);
     setOrderNumber((prev) => prev + 1);
     setShowReceiptModal(false);
     setSelectedWaitingNumber(null);

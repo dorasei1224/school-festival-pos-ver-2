@@ -69,11 +69,7 @@ export async function cleanupStaleWaitingCards(): Promise<void> {
       return;
     }
 
-    const activeOrderIds = new Set(
-      (orderRows ?? [])
-        .filter((order) => ['pending', 'ready', 'preparing'].includes(String(order.status ?? '').toLowerCase()))
-        .map((order) => String(order.id))
-    );
+    const knownOrderIds = new Set((orderRows ?? []).map((order) => String(order.id)));
 
     const { data: cardRows, error: cardError } = await supabase
       .from('waiting_cards')
@@ -84,9 +80,15 @@ export async function cleanupStaleWaitingCards(): Promise<void> {
       return;
     }
 
-    const staleAssignments = (cardRows ?? []).filter(
-      (card) => card.status === 'assigned' && (!card.order_id || !activeOrderIds.has(String(card.order_id)))
-    );
+    const staleAssignments = (cardRows ?? []).filter((card) => {
+      if (card.status !== 'assigned') return false;
+      if (!card.order_id) return true;
+      const orderId = String(card.order_id);
+      if (!knownOrderIds.has(orderId)) return true;
+
+      const order = (orderRows ?? []).find((row) => String(row.id) === orderId);
+      return String(order?.status ?? '').toLowerCase() === 'cancelled';
+    });
 
     for (const card of staleAssignments) {
       if (!card.order_id) continue;
@@ -279,7 +281,15 @@ export async function reserveWaitingCard(orderKey: string | number, preferredNum
 
   try {
     await cleanupStaleWaitingCards();
-    await ensureActiveWaitingCardAssignments();
+
+    const preferredNumberIsRangeValid = preferredNumber != null
+      && Number.isInteger(preferredNumber)
+      && preferredNumber >= 1
+      && preferredNumber <= 10;
+
+    if (!preferredNumberIsRangeValid) {
+      await ensureActiveWaitingCardAssignments();
+    }
 
     const { data, error } = await supabase
       .from('waiting_cards')
@@ -302,8 +312,9 @@ export async function reserveWaitingCard(orderKey: string | number, preferredNum
         .map((row) => Number(row.waiting_number))
     );
 
+    const preferredNumberIsAvailable = preferredNumberIsRangeValid && !occupied.has(preferredNumber!);
     const candidates = Array.from({ length: 10 }, (_, index) => index + 1).filter((number) => !occupied.has(number));
-    const chosen = preferredNumber != null && candidates.includes(preferredNumber)
+    const chosen = preferredNumberIsAvailable
       ? preferredNumber
       : candidates[0] ?? null;
 
@@ -326,21 +337,37 @@ export async function reserveWaitingCard(orderKey: string | number, preferredNum
       return null;
     }
 
-    const cards: WaitingCard[] = getDefaultWaitingCards().map((card) => {
-      if (card.number === chosen) {
+    const cards: WaitingCard[] = Array.from({ length: 10 }, (_, index) => {
+      const number = index + 1;
+      const row = (data ?? []).find((entry) => Number(entry.waiting_number) === number && entry.status === 'assigned');
+
+      if (number === chosen) {
         return {
-          ...card,
+          id: number,
+          number,
           status: 'assigned',
           assignedOrderKey: normalizedOrderKey,
           assignedAt: new Date().toISOString(),
-        };
+        } satisfies WaitingCard;
       }
+
+      if (row && row.order_id) {
+        return {
+          id: number,
+          number,
+          status: 'assigned',
+          assignedOrderKey: String(row.order_id),
+          assignedAt: new Date().toISOString(),
+        } satisfies WaitingCard;
+      }
+
       return {
-        ...card,
+        id: number,
+        number,
         status: 'available',
         assignedOrderKey: undefined,
         assignedAt: undefined,
-      };
+      } satisfies WaitingCard;
     });
 
     saveWaitingCards(cards);
