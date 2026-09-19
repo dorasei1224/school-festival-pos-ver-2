@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { cleanupStaleWaitingCards, ensureActiveWaitingCardAssignments } from '@/lib/waiting-cards';
+import { cleanupStaleWaitingCards, ensureActiveWaitingCardAssignments, releaseWaitingCard } from '@/lib/waiting-cards';
 import { HelpButton, TutorialModal, hasSeenTutorial, markTutorialSeen, type TutorialStep } from '@/components/TutorialModal';
 
 interface OrderItem {
@@ -165,6 +165,11 @@ export default function CounterPage() {
       alert(`受け渡し状態の更新に失敗しました: ${error.message}`);
       return;
     }
+
+    if (databaseStatus === 'completed') {
+      await releaseWaitingCard(orderId);
+    }
+
     await fetchOrders();
   };
 

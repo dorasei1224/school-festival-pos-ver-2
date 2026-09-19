@@ -316,9 +316,14 @@ export default function AdminPage() {
     if (error) {
       alert(`ステータス更新に失敗しました: ${error.message}`);
       console.error(error);
-    } else {
-      await fetchData(); // 成功したら即時再取得
+      return;
     }
+
+    if (newStatus === 'completed' || newStatus === 'cancelled') {
+      await releaseWaitingCard(orderId);
+    }
+
+    await fetchData(); // 成功したら即時再取得
   };
 
   // 注文キャンセル処理

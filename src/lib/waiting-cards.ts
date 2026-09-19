@@ -87,7 +87,8 @@ export async function cleanupStaleWaitingCards(): Promise<void> {
       if (!knownOrderIds.has(orderId)) return true;
 
       const order = (orderRows ?? []).find((row) => String(row.id) === orderId);
-      return String(order?.status ?? '').toLowerCase() === 'cancelled';
+      const orderStatus = String(order?.status ?? '').toLowerCase();
+      return orderStatus === 'cancelled' || orderStatus === 'completed';
     });
 
     for (const card of staleAssignments) {
